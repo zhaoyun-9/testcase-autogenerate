@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>需求管理测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            background: #f9f9f9;
+        }
+        .stats {
+            display: flex;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .stat-item {
+            flex: 1;
+            text-align: center;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1890ff;
+        }
+        .stat-label {
+            color: #666;
+            margin-top: 8px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #f5f5f5;
+            font-weight: bold;
+        }
+        .tag {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: white;
+        }
+        .tag-functional { background-color: #1890ff; }
+        .tag-security { background-color: #f5222d; }
+        .tag-performance { background-color: #eb2f96; }
+        .tag-usability { background-color: #faad14; }
+        .tag-high { background-color: #f5222d; }
+        .tag-medium { background-color: #fa8c16; }
+        .tag-low { background-color: #52c41a; }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .error {
+            color: #f5222d;
+            background: #fff2f0;
+            border: 1px solid #ffccc7;
+            padding: 12px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>需求管理测试页面</h1>
+    
+    <div class="card">
+        <h2>需求覆盖统计</h2>
+        <div id="stats-loading" class="loading">加载统计数据中...</div>
+        <div id="stats-error" class="error" style="display: none;"></div>
+        <div id="stats-content" style="display: none;">
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-number" id="total-requirements">0</div>
+                    <div class="stat-label">总需求数</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="covered-requirements">0</div>
+                    <div class="stat-label">已覆盖</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="uncovered-requirements">0</div>
+                    <div class="stat-label">未覆盖</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="coverage-rate">0%</div>
+                    <div class="stat-label">覆盖率</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>需求列表</h2>
+        <div id="requirements-loading" class="loading">加载需求列表中...</div>
+        <div id="requirements-error" class="error" style="display: none;"></div>
+        <div id="requirements-content" style="display: none;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>需求编号</th>
+                        <th>标题</th>
+                        <th>类型</th>
+                        <th>优先级</th>
+                        <th>状态</th>
+                        <th>AI置信度</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="requirements-table-body">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>需求详情测试</h2>
+        <div id="requirement-detail" style="display: none;">
+            <h3 id="detail-title"></h3>
+            <p id="detail-description"></p>
+            <h4>关联的测试用例:</h4>
+            <div id="test-cases-list"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8002/api/v1';
+
+        // 类型标签映射
+        const typeLabels = {
+            'functional': '功能需求',
+            'security': '安全需求',
+            'performance': '性能需求',
+            'usability': '可用性需求',
+            'non_functional': '非功能需求',
+            'business': '业务需求',
+            'technical': '技术需求',
+            'interface': '接口需求'
+        };
+
+        const priorityLabels = {
+            'high': '高',
+            'medium': '中',
+            'low': '低'
+        };
+
+        const statusLabels = {
+            'draft': '草稿',
+            'approved': '已批准',
+            'rejected': '已拒绝',
+            'deprecated': '已废弃'
+        };
+
+        // 加载覆盖统计
+        async function loadCoverageStats() {
+            try {
+                const response = await fetch(`${API_BASE}/requirements/stats/coverage`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                const data = await response.json();
+                
+                document.getElementById('total-requirements').textContent = data.total_requirements;
+                document.getElementById('covered-requirements').textContent = data.covered_requirements;
+                document.getElementById('uncovered-requirements').textContent = data.uncovered_requirements;
+                document.getElementById('coverage-rate').textContent = data.coverage_rate + '%';
+                
+                document.getElementById('stats-loading').style.display = 'none';
+                document.getElementById('stats-content').style.display = 'block';
+            } catch (error) {
+                console.error('加载覆盖统计失败:', error);
+                document.getElementById('stats-loading').style.display = 'none';
+                document.getElementById('stats-error').style.display = 'block';
+                document.getElementById('stats-error').textContent = '加载覆盖统计失败: ' + error.message;
+            }
+        }
+
+        // 加载需求列表
+        async function loadRequirements() {
+            try {
+                const response = await fetch(`${API_BASE}/requirements/?page=1&page_size=20`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                const data = await response.json();
+                
+                const tbody = document.getElementById('requirements-table-body');
+                tbody.innerHTML = '';
+                
+                data.items.forEach(req => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${req.requirement_id}</td>
+                        <td>${req.title}</td>
+                        <td><span class="tag tag-${req.requirement_type}">${typeLabels[req.requirement_type] || req.requirement_type}</span></td>
+                        <td><span class="tag tag-${req.priority}">${priorityLabels[req.priority] || req.priority}</span></td>
+                        <td>${statusLabels[req.status] || req.status}</td>
+                        <td>${req.ai_confidence ? (req.ai_confidence * 100).toFixed(1) + '%' : '-'}</td>
+                        <td>${new Date(req.created_at).toLocaleString('zh-CN')}</td>
+                        <td><button onclick="viewRequirementDetail('${req.requirement_id}', '${req.title}', '${req.description || ''}')">查看详情</button></td>
+                    `;
+                    tbody.appendChild(row);
+                });
+                
+                document.getElementById('requirements-loading').style.display = 'none';
+                document.getElementById('requirements-content').style.display = 'block';
+            } catch (error) {
+                console.error('加载需求列表失败:', error);
+                document.getElementById('requirements-loading').style.display = 'none';
+                document.getElementById('requirements-error').style.display = 'block';
+                document.getElementById('requirements-error').textContent = '加载需求列表失败: ' + error.message;
+            }
+        }
+
+        // 查看需求详情
+        async function viewRequirementDetail(requirementId, title, description) {
+            try {
+                document.getElementById('detail-title').textContent = `${requirementId}: ${title}`;
+                document.getElementById('detail-description').textContent = description;
+
+                const response = await fetch(`${API_BASE}/requirements/${requirementId}/test-cases`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                const testCases = await response.json();
+
+                const testCasesList = document.getElementById('test-cases-list');
+                testCasesList.innerHTML = '';
+
+                if (testCases.length === 0) {
+                    // 如果没有真实数据，显示模拟数据来演示功能
+                    const mockTestCases = [
+                        {
+                            id: 'mock-1',
+                            test_case_id: 'TC-001',
+                            coverage_type: 'full',
+                            coverage_description: '完全覆盖用户登录功能的所有场景',
+                            created_at: new Date().toISOString(),
+                            test_case: {
+                                id: 'TC-001',
+                                title: '用户登录功能测试',
+                                description: '验证用户能够使用正确的用户名和密码成功登录系统',
+                                test_type: 'functional',
+                                test_level: 'system',
+                                priority: 'P1',
+                                status: 'approved',
+                                created_at: new Date().toISOString()
+                            }
+                        },
+                        {
+                            id: 'mock-2',
+                            test_case_id: 'TC-002',
+                            coverage_type: 'partial',
+                            coverage_description: '部分覆盖密码验证功能',
+                            created_at: new Date().toISOString(),
+                            test_case: {
+                                id: 'TC-002',
+                                title: '密码强度验证测试',
+                                description: '验证系统对密码强度的验证规则',
+                                test_type: 'security',
+                                test_level: 'system',
+                                priority: 'P0',
+                                status: 'approved',
+                                created_at: new Date().toISOString()
+                            }
+                        }
+                    ];
+
+                    testCasesList.innerHTML = '<p style="color: #fa8c16; margin-bottom: 16px;"><strong>注意：以下为演示数据</strong></p>';
+
+                    mockTestCases.forEach(tc => {
+                        const tcDiv = document.createElement('div');
+                        tcDiv.style.cssText = 'border: 1px solid #d9d9d9; border-radius: 6px; padding: 16px; margin-bottom: 12px; background: #fafafa;';
+                        tcDiv.innerHTML = `
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                                <div style="flex: 1;">
+                                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                                        <strong style="color: #262626;">${tc.test_case.title}</strong>
+                                        <span class="tag tag-${tc.coverage_type === 'full' ? 'success' : 'warning'}" style="background: ${tc.coverage_type === 'full' ? '#52c41a' : '#fa8c16'}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">
+                                            ${tc.coverage_type === 'full' ? '完全覆盖' : '部分覆盖'}
+                                        </span>
+                                    </div>
+                                    <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+                                        <span style="background: #1890ff; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">
+                                            ${tc.test_case.test_type === 'functional' ? '功能测试' : tc.test_case.test_type === 'security' ? '安全测试' : tc.test_case.test_type}
+                                        </span>
+                                        <span style="background: ${tc.test_case.priority === 'P0' ? '#f5222d' : tc.test_case.priority === 'P1' ? '#fa8c16' : '#52c41a'}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">
+                                            ${tc.test_case.priority}
+                                        </span>
+                                        <span style="background: #52c41a; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">
+                                            已批准
+                                        </span>
+                                    </div>
+                                </div>
+                                <div style="color: #8c8c8c; font-size: 12px;">
+                                    关联时间: ${new Date(tc.created_at).toLocaleString('zh-CN')}
+                                </div>
+                            </div>
+                            <div style="color: #595959; line-height: 1.5; font-size: 14px; margin-bottom: 8px; padding: 8px 12px; background-color: #f0f8ff; border-radius: 4px; border-left: 3px solid #1890ff;">
+                                <strong>测试用例描述:</strong> ${tc.test_case.description}
+                            </div>
+                            <div style="color: #595959; line-height: 1.5; font-size: 14px; padding: 8px 12px; background-color: #f6ffed; border-radius: 4px; border-left: 3px solid #52c41a;">
+                                <strong>覆盖说明:</strong> ${tc.coverage_description}
+                            </div>
+                        `;
+                        testCasesList.appendChild(tcDiv);
+                    });
+                } else {
+                    // 显示真实数据
+                    testCases.forEach(tc => {
+                        const tcDiv = document.createElement('div');
+                        tcDiv.style.cssText = 'border: 1px solid #d9d9d9; border-radius: 6px; padding: 16px; margin-bottom: 12px;';
+                        tcDiv.innerHTML = `
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <strong>${tc.test_case?.title || tc.test_case_id}</strong>
+                                <span style="background: ${tc.coverage_type === 'full' ? '#52c41a' : '#fa8c16'}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">
+                                    ${tc.coverage_type === 'full' ? '完全覆盖' : '部分覆盖'}
+                                </span>
+                            </div>
+                            ${tc.test_case?.description ? `<p><strong>描述:</strong> ${tc.test_case.description}</p>` : ''}
+                            ${tc.coverage_description ? `<p><strong>覆盖说明:</strong> ${tc.coverage_description}</p>` : ''}
+                        `;
+                        testCasesList.appendChild(tcDiv);
+                    });
+                }
+
+                document.getElementById('requirement-detail').style.display = 'block';
+
+            } catch (error) {
+                console.error('加载需求详情失败:', error);
+                alert('加载需求详情失败: ' + error.message);
+            }
+        }
+
+        // 页面加载完成后执行
+        document.addEventListener('DOMContentLoaded', function() {
+            loadCoverageStats();
+            loadRequirements();
+        });
+    </script>
+</body>
+</html>

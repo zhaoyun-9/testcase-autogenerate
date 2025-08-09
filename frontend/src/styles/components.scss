@@ -1,0 +1,399 @@
+// 组件样式系统
+// 统一的组件样式定义
+
+// ==================== 按钮组件 ====================
+.tc-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-4);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--border-radius);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-none);
+  text-decoration: none;
+  cursor: pointer;
+  transition: var(--transition-all);
+  user-select: none;
+  white-space: nowrap;
+
+  &:focus {
+    outline: 2px solid var(--primary-500);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  // 尺寸变体
+  &--small {
+    padding: var(--spacing-1) var(--spacing-3);
+    font-size: var(--font-size-xs);
+  }
+
+  &--large {
+    padding: var(--spacing-3) var(--spacing-6);
+    font-size: var(--font-size-base);
+  }
+
+  // 颜色变体
+  &--primary {
+    background-color: var(--primary-600);
+    border-color: var(--primary-600);
+    color: var(--text-inverse);
+
+    &:hover:not(:disabled) {
+      background-color: var(--primary-700);
+      border-color: var(--primary-700);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-primary);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+  }
+
+  &--secondary {
+    background-color: var(--bg-primary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+
+    &:hover:not(:disabled) {
+      background-color: var(--bg-secondary);
+      border-color: var(--border-color-dark);
+    }
+  }
+
+  &--success {
+    background-color: var(--success-600);
+    border-color: var(--success-600);
+    color: var(--text-inverse);
+
+    &:hover:not(:disabled) {
+      background-color: var(--success-700);
+      border-color: var(--success-700);
+      box-shadow: var(--shadow-success);
+    }
+  }
+
+  &--warning {
+    background-color: var(--warning-600);
+    border-color: var(--warning-600);
+    color: var(--text-inverse);
+
+    &:hover:not(:disabled) {
+      background-color: var(--warning-700);
+      border-color: var(--warning-700);
+      box-shadow: var(--shadow-warning);
+    }
+  }
+
+  &--danger {
+    background-color: var(--error-600);
+    border-color: var(--error-600);
+    color: var(--text-inverse);
+
+    &:hover:not(:disabled) {
+      background-color: var(--error-700);
+      border-color: var(--error-700);
+      box-shadow: var(--shadow-error);
+    }
+  }
+
+  &--ghost {
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--text-primary);
+
+    &:hover:not(:disabled) {
+      background-color: var(--bg-secondary);
+    }
+  }
+
+  &--text {
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--primary-600);
+    padding: var(--spacing-1) var(--spacing-2);
+
+    &:hover:not(:disabled) {
+      background-color: var(--primary-50);
+      color: var(--primary-700);
+    }
+  }
+}
+
+// ==================== 卡片组件 ====================
+.tc-card {
+  background-color: var(--bg-primary);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition-shadow);
+  overflow: hidden;
+
+  &:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  &__header {
+    padding: var(--spacing-6);
+    border-bottom: var(--border-width) solid var(--border-color-light);
+    background-color: var(--bg-secondary);
+
+    h1, h2, h3, h4, h5, h6 {
+      margin: 0;
+      font-weight: var(--font-weight-semibold);
+      color: var(--text-primary);
+    }
+  }
+
+  &__body {
+    padding: var(--spacing-6);
+  }
+
+  &__footer {
+    padding: var(--spacing-6);
+    border-top: var(--border-width) solid var(--border-color-light);
+    background-color: var(--bg-secondary);
+  }
+
+  // 变体
+  &--bordered {
+    border-width: var(--border-width-thick);
+  }
+
+  &--shadow {
+    box-shadow: var(--shadow-lg);
+  }
+
+  &--hoverable {
+    cursor: pointer;
+    transition: var(--transition-all);
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-xl);
+    }
+  }
+}
+
+// ==================== 输入框组件 ====================
+.tc-input {
+  display: block;
+  width: 100%;
+  padding: var(--spacing-3) var(--spacing-4);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--border-radius);
+  background-color: var(--bg-primary);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  color: var(--text-primary);
+  transition: var(--transition-colors);
+
+  &::placeholder {
+    color: var(--text-quaternary);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+
+  &:disabled {
+    background-color: var(--bg-tertiary);
+    color: var(--text-disabled);
+    cursor: not-allowed;
+  }
+
+  &--error {
+    border-color: var(--error-500);
+
+    &:focus {
+      border-color: var(--error-500);
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+    }
+  }
+
+  &--success {
+    border-color: var(--success-500);
+
+    &:focus {
+      border-color: var(--success-500);
+      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+    }
+  }
+}
+
+// ==================== 标签组件 ====================
+.tc-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-none);
+
+  &--primary {
+    background-color: var(--primary-100);
+    color: var(--primary-800);
+  }
+
+  &--success {
+    background-color: var(--success-100);
+    color: var(--success-800);
+  }
+
+  &--warning {
+    background-color: var(--warning-100);
+    color: var(--warning-800);
+  }
+
+  &--danger {
+    background-color: var(--error-100);
+    color: var(--error-800);
+  }
+
+  &--info {
+    background-color: var(--info-100);
+    color: var(--info-800);
+  }
+
+  &--gray {
+    background-color: var(--gray-100);
+    color: var(--gray-800);
+  }
+}
+
+// ==================== 徽章组件 ====================
+.tc-badge {
+  position: relative;
+  display: inline-block;
+
+  &__content {
+    position: absolute;
+    top: 0;
+    right: 0;
+    transform: translate(50%, -50%);
+    min-width: 20px;
+    height: 20px;
+    padding: 0 var(--spacing-1);
+    background-color: var(--error-500);
+    color: var(--text-inverse);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    line-height: 20px;
+    text-align: center;
+    border-radius: var(--border-radius-full);
+    border: 2px solid var(--bg-primary);
+  }
+
+  &--dot {
+    .tc-badge__content {
+      width: 8px;
+      height: 8px;
+      min-width: auto;
+      padding: 0;
+      border-radius: var(--border-radius-full);
+    }
+  }
+}
+
+// ==================== 加载状态组件 ====================
+.tc-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-8);
+
+  &__spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid var(--border-color-light);
+    border-top-color: var(--primary-500);
+    border-radius: var(--border-radius-full);
+    animation: spin 1s linear infinite;
+  }
+
+  &__text {
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+  }
+
+  &--large {
+    .tc-loading__spinner {
+      width: 32px;
+      height: 32px;
+      border-width: 4px;
+    }
+
+    .tc-loading__text {
+      font-size: var(--font-size-base);
+    }
+  }
+
+  &--small {
+    .tc-loading__spinner {
+      width: 16px;
+      height: 16px;
+      border-width: 2px;
+    }
+
+    .tc-loading__text {
+      font-size: var(--font-size-xs);
+    }
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// ==================== 空状态组件 ====================
+.tc-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-12) var(--spacing-6);
+  text-align: center;
+
+  &__image {
+    width: 120px;
+    height: 120px;
+    margin-bottom: var(--spacing-6);
+    opacity: 0.6;
+  }
+
+  &__title {
+    margin-bottom: var(--spacing-2);
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+  }
+
+  &__description {
+    margin-bottom: var(--spacing-6);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    max-width: 400px;
+  }
+
+  &__actions {
+    display: flex;
+    gap: var(--spacing-3);
+  }
+}

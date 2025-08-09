@@ -1,0 +1,35 @@
+# 测试用例生成系统 - Python依赖包
+
+# ==================== 核心框架 ====================
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+
+# ==================== AutoGen智能体框架 ====================
+autogen-core==0.7.1
+autogen-agentchat==0.7.1
+autogen-ext[openai]==0.7.1
+volcengine-python-sdk[ark]
+# ==================== 日志和监控 ====================
+loguru
+structlog
+prometheus-client
+
+# ==================== 数据库相关 ====================
+sqlalchemy
+asyncmy
+aiomysql
+alembic
+greenlet  # SQLAlchemy异步操作必需依赖
+
+# ==================== 实时通信 ====================
+sse-starlette
+
+# ==================== 文件处理 ====================
+openpyxl
+python-multipart
+PyMuPDF  # PDF转图片处理
+Pillow   # 图像处理
+python-docx  # Word文档处理
+PyPDF2   # PDF文本提取（备用）

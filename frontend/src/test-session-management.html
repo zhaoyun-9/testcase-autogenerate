@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>会话管理功能测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .header {
+            border-bottom: 1px solid #e8e8e8;
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+        }
+        .session-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .session-item {
+            border: 1px solid #d9d9d9;
+            border-radius: 6px;
+            padding: 16px;
+            background: #fafafa;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        .session-item:hover {
+            border-color: #1890ff;
+            box-shadow: 0 2px 8px rgba(24, 144, 255, 0.2);
+        }
+        .session-item.active {
+            border-color: #1890ff;
+            background: #e6f7ff;
+        }
+        .session-name {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #262626;
+        }
+        .session-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .session-status {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .status-processing {
+            background: #fff7e6;
+            color: #fa8c16;
+        }
+        .status-completed {
+            background: #f6ffed;
+            color: #52c41a;
+        }
+        .status-failed {
+            background: #fff2f0;
+            color: #ff4d4f;
+        }
+        .session-time {
+            font-size: 12px;
+            color: #8c8c8c;
+        }
+        .session-progress {
+            margin-top: 8px;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #f0f0f0;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #1890ff;
+            transition: width 0.3s;
+        }
+        .session-actions {
+            margin-top: 12px;
+            display: flex;
+            gap: 8px;
+        }
+        .btn {
+            padding: 4px 12px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s;
+        }
+        .btn:hover {
+            border-color: #1890ff;
+            color: #1890ff;
+        }
+        .btn-danger {
+            border-color: #ff4d4f;
+            color: #ff4d4f;
+        }
+        .btn-danger:hover {
+            background: #ff4d4f;
+            color: white;
+        }
+        .stream-output {
+            border: 1px solid #d9d9d9;
+            border-radius: 6px;
+            height: 400px;
+            padding: 16px;
+            background: #fafafa;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .log-entry {
+            margin-bottom: 8px;
+            padding: 4px 0;
+        }
+        .log-time {
+            color: #8c8c8c;
+            margin-right: 8px;
+        }
+        .log-source {
+            color: #1890ff;
+            font-weight: 500;
+            margin-right: 8px;
+        }
+        .log-content {
+            color: #262626;
+        }
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        .controls button {
+            padding: 8px 16px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .controls button:hover {
+            border-color: #1890ff;
+            color: #1890ff;
+        }
+        .controls button.primary {
+            background: #1890ff;
+            border-color: #1890ff;
+            color: white;
+        }
+        .controls button.primary:hover {
+            background: #40a9ff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>会话管理功能测试</h1>
+            <p>测试多会话管理、会话切换和实时输出功能</p>
+        </div>
+
+        <div class="controls">
+            <button class="primary" onclick="createNewSession()">创建新会话</button>
+            <button onclick="refreshSessions()">刷新会话列表</button>
+            <button onclick="clearAllSessions()">清空所有会话</button>
+            <span>当前选中会话: <strong id="currentSession">无</strong></span>
+        </div>
+
+        <div class="session-list" id="sessionList">
+            <!-- 会话列表将在这里动态生成 -->
+        </div>
+
+        <div class="stream-output" id="streamOutput">
+            <div class="log-entry">
+                <span class="log-time">2024-01-17 10:30:00</span>
+                <span class="log-source">系统</span>
+                <span class="log-content">等待选择会话...</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 模拟会话数据
+        let sessions = [
+            {
+                sessionId: 'session-001',
+                fileName: 'requirements.pdf',
+                status: 'completed',
+                inputType: 'file',
+                progress: 100,
+                createdAt: '2024-01-17T10:00:00Z',
+                completedAt: '2024-01-17T10:05:00Z'
+            },
+            {
+                sessionId: 'session-002',
+                fileName: 'api-spec.json',
+                status: 'processing',
+                inputType: 'file',
+                progress: 65,
+                createdAt: '2024-01-17T10:15:00Z'
+            },
+            {
+                sessionId: 'session-003',
+                fileName: null,
+                status: 'failed',
+                inputType: 'text',
+                progress: 30,
+                createdAt: '2024-01-17T10:20:00Z',
+                error: '处理超时'
+            }
+        ];
+
+        let selectedSessionId = '';
+        let sessionCounter = 4;
+
+        function renderSessions() {
+            const sessionList = document.getElementById('sessionList');
+            sessionList.innerHTML = '';
+
+            sessions.forEach(session => {
+                const sessionItem = document.createElement('div');
+                sessionItem.className = `session-item ${selectedSessionId === session.sessionId ? 'active' : ''}`;
+                sessionItem.onclick = () => selectSession(session.sessionId);
+
+                const displayName = session.fileName || `文本输入会话 ${session.sessionId.slice(-3)}`;
+                const statusClass = `status-${session.status}`;
+                const statusText = {
+                    'processing': '处理中',
+                    'completed': '已完成',
+                    'failed': '失败',
+                    'created': '已创建'
+                }[session.status] || session.status;
+
+                sessionItem.innerHTML = `
+                    <div class="session-name">${displayName}</div>
+                    <div class="session-meta">
+                        <span class="session-status ${statusClass}">${statusText}</span>
+                        <span class="session-time">${formatTime(session.createdAt)}</span>
+                    </div>
+                    <div class="session-progress">
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${session.progress}%"></div>
+                        </div>
+                        <div style="font-size: 12px; color: #8c8c8c; margin-top: 4px;">${session.progress}%</div>
+                    </div>
+                    <div class="session-actions">
+                        <button class="btn" onclick="event.stopPropagation(); viewSessionDetail('${session.sessionId}')">查看详情</button>
+                        <button class="btn btn-danger" onclick="event.stopPropagation(); deleteSession('${session.sessionId}')">删除</button>
+                    </div>
+                `;
+
+                sessionList.appendChild(sessionItem);
+            });
+
+            if (sessions.length === 0) {
+                sessionList.innerHTML = '<div style="text-align: center; color: #8c8c8c; padding: 40px;">暂无活动会话</div>';
+            }
+        }
+
+        function selectSession(sessionId) {
+            selectedSessionId = sessionId;
+            document.getElementById('currentSession').textContent = sessionId;
+            renderSessions();
+            
+            // 模拟显示该会话的日志
+            const session = sessions.find(s => s.sessionId === sessionId);
+            if (session) {
+                showSessionLogs(session);
+            }
+        }
+
+        function showSessionLogs(session) {
+            const streamOutput = document.getElementById('streamOutput');
+            const displayName = session.fileName || '文本输入会话';
+            
+            streamOutput.innerHTML = `
+                <div class="log-entry">
+                    <span class="log-time">${formatTime(session.createdAt)}</span>
+                    <span class="log-source">系统</span>
+                    <span class="log-content">开始处理 ${displayName}</span>
+                </div>
+                <div class="log-entry">
+                    <span class="log-time">${formatTime(session.createdAt, 1)}</span>
+                    <span class="log-source">文件解析器</span>
+                    <span class="log-content">正在分析文件内容...</span>
+                </div>
+                <div class="log-entry">
+                    <span class="log-time">${formatTime(session.createdAt, 2)}</span>
+                    <span class="log-source">测试用例生成器</span>
+                    <span class="log-content">开始生成测试用例</span>
+                </div>
+                ${session.status === 'completed' ? `
+                <div class="log-entry">
+                    <span class="log-time">${formatTime(session.completedAt || session.createdAt, 5)}</span>
+                    <span class="log-source">系统</span>
+                    <span class="log-content">✅ 处理完成，共生成 12 个测试用例</span>
+                </div>
+                ` : ''}
+                ${session.status === 'failed' ? `
+                <div class="log-entry">
+                    <span class="log-time">${formatTime(session.createdAt, 3)}</span>
+                    <span class="log-source">系统</span>
+                    <span class="log-content">❌ 处理失败: ${session.error}</span>
+                </div>
+                ` : ''}
+            `;
+        }
+
+        function createNewSession() {
+            const newSession = {
+                sessionId: `session-${String(sessionCounter).padStart(3, '0')}`,
+                fileName: Math.random() > 0.5 ? `test-file-${sessionCounter}.pdf` : null,
+                status: 'processing',
+                inputType: Math.random() > 0.5 ? 'file' : 'text',
+                progress: Math.floor(Math.random() * 100),
+                createdAt: new Date().toISOString()
+            };
+            
+            sessions.unshift(newSession);
+            sessionCounter++;
+            renderSessions();
+            
+            // 自动选择新创建的会话
+            selectSession(newSession.sessionId);
+        }
+
+        function refreshSessions() {
+            // 模拟从服务器刷新数据
+            sessions.forEach(session => {
+                if (session.status === 'processing') {
+                    session.progress = Math.min(100, session.progress + Math.floor(Math.random() * 20));
+                    if (session.progress >= 100) {
+                        session.status = 'completed';
+                        session.completedAt = new Date().toISOString();
+                    }
+                }
+            });
+            renderSessions();
+        }
+
+        function clearAllSessions() {
+            if (confirm('确定要清空所有会话吗？')) {
+                sessions = [];
+                selectedSessionId = '';
+                document.getElementById('currentSession').textContent = '无';
+                renderSessions();
+                document.getElementById('streamOutput').innerHTML = '<div class="log-entry"><span class="log-time">' + formatTime(new Date().toISOString()) + '</span><span class="log-source">系统</span><span class="log-content">所有会话已清空</span></div>';
+            }
+        }
+
+        function viewSessionDetail(sessionId) {
+            const session = sessions.find(s => s.sessionId === sessionId);
+            if (session) {
+                const displayName = session.fileName || '文本输入会话';
+                alert(`会话详情:\n\n会话ID: ${session.sessionId}\n名称: ${displayName}\n状态: ${session.status}\n进度: ${session.progress}%\n创建时间: ${formatTime(session.createdAt)}`);
+            }
+        }
+
+        function deleteSession(sessionId) {
+            if (confirm('确定要删除这个会话吗？')) {
+                const index = sessions.findIndex(s => s.sessionId === sessionId);
+                if (index >= 0) {
+                    sessions.splice(index, 1);
+                    if (selectedSessionId === sessionId) {
+                        selectedSessionId = '';
+                        document.getElementById('currentSession').textContent = '无';
+                    }
+                    renderSessions();
+                }
+            }
+        }
+
+        function formatTime(timestamp, addMinutes = 0) {
+            const date = new Date(timestamp);
+            date.setMinutes(date.getMinutes() + addMinutes);
+            return date.toLocaleString('zh-CN', {
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
+        // 初始化
+        renderSessions();
+        
+        // 模拟实时更新
+        setInterval(() => {
+            sessions.forEach(session => {
+                if (session.status === 'processing' && Math.random() > 0.7) {
+                    session.progress = Math.min(100, session.progress + Math.floor(Math.random() * 10));
+                    if (session.progress >= 100) {
+                        session.status = 'completed';
+                        session.completedAt = new Date().toISOString();
+                    }
+                }
+            });
+            renderSessions();
+        }, 3000);
+    </script>
+</body>
+</html>
