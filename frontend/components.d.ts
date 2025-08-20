@@ -8,6 +8,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     BatchEditDialog: typeof import('./src/components/BatchEditDialog/index.vue')['default']
+    CustomMindMap: typeof import('./src/components/CustomMindMap/index.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
     ElAvatar: typeof import('element-plus/es')['ElAvatar']
     ElBadge: typeof import('element-plus/es')['ElBadge']
@@ -59,8 +60,10 @@ declare module 'vue' {
     ElTag: typeof import('element-plus/es')['ElTag']
     ElTooltip: typeof import('element-plus/es')['ElTooltip']
     ElUpload: typeof import('element-plus/es')['ElUpload']
+    EnhancedMindMap: typeof import('./src/components/EnhancedMindMap/index.vue')['default']
     ExportDialog: typeof import('./src/components/ExportDialog/index.vue')['default']
     FileUpload: typeof import('./src/components/FileUpload/index.vue')['default']
+    InteractiveMindMap: typeof import('./src/components/InteractiveMindMap/index.vue')['default']
     MindmapRenderer: typeof import('./src/components/MindmapRenderer/index.vue')['default']
     MindMapViewer: typeof import('./src/components/MindMapViewer/index.vue')['default']
     ProductionMindMap: typeof import('./src/components/ProductionMindMap/index.vue')['default']

@@ -1,474 +1,265 @@
 <template>
-  <div class="mindmap-page">
-
-
-
-
-    <!-- 思维导图容器 -->
-    <div class="mindmap-container" ref="mindmapContainer">
-        <div v-if="loading" class="loading-container">
-          <el-loading
-            text="正在加载思维导图..."
-            element-loading-text="正在加载思维导图..."
-            element-loading-spinner="el-icon-loading"
-            element-loading-background="rgba(0, 0, 0, 0.8)"
-          />
-        </div>
-
-        <el-empty
-          v-else-if="!mindmapData"
-          description="暂无思维导图数据"
-          :image-size="120"
-        >
-          <el-button type="primary" @click="generateMindmap">
-            <el-icon><Plus /></el-icon>
-            生成思维导图
-          </el-button>
-        </el-empty>
-
-        <div v-else class="mindmap-content">
-          <!-- 思维导图渲染区域 -->
-          <ProductionMindMap
-            :data="mindmapData"
-            @node-click="handleNodeClick"
-          />
+  <div class="mindmap-detail">
+    <div class="detail-header">
+      <div class="header-left">
+        <el-button @click="goBack" text>
+          <el-icon><ArrowLeft /></el-icon>
+          返回列表
+        </el-button>
+        <div class="title-section">
+          <h1>{{ mindmapTitle }}</h1>
+          <span class="last-saved">{{ lastSavedText }}</span>
         </div>
       </div>
-
-    <!-- 侧边面板 -->
-    <div v-if="selectedNode" class="side-panel">
-        <el-card shadow="never">
-          <template #header>
-            <div class="panel-header">
-              <span>节点详情</span>
-              <el-button type="text" @click="closeSidePanel">
-                <el-icon><Close /></el-icon>
-              </el-button>
-            </div>
-          </template>
-          
-          <div class="node-details">
-            <div class="detail-item">
-              <label>标题:</label>
-              <el-input
-                v-model="selectedNode.title"
-                @change="updateNode"
-                size="small"
-              />
-            </div>
-            
-            <div class="detail-item">
-              <label>类型:</label>
-              <el-tag :type="getNodeTypeTag(selectedNode.type)">
-                {{ getNodeTypeLabel(selectedNode.type) }}
-              </el-tag>
-            </div>
-            
-            <div v-if="selectedNode.description" class="detail-item">
-              <label>描述:</label>
-              <el-input
-                v-model="selectedNode.description"
-                type="textarea"
-                :rows="3"
-                @change="updateNode"
-                size="small"
-              />
-            </div>
-            
-            <div v-if="selectedNode.testSteps" class="detail-item">
-              <label>测试步骤:</label>
-              <div class="test-steps">
-                <div
-                  v-for="(step, index) in selectedNode.testSteps"
-                  :key="index"
-                  class="step-item"
-                >
-                  <span class="step-number">{{ step.step }}</span>
-                  <span class="step-action">{{ step.action }}</span>
-                </div>
-              </div>
-            </div>
-            
-            <div v-if="selectedNode.tags" class="detail-item">
-              <label>标签:</label>
-              <div class="tags">
-                <el-tag
-                  v-for="tag in selectedNode.tags"
-                  :key="tag"
-                  size="small"
-                  type="info"
-                >
-                  {{ tag }}
-                </el-tag>
-              </div>
-            </div>
-          </div>
-        </el-card>
+      
+      <div class="header-right">
+        <el-button @click="saveMindmap" type="primary" :loading="saving">
+          <el-icon><Document /></el-icon>
+          保存
+        </el-button>
+      </div>
     </div>
 
-    <!-- 导出对话框 -->
-    <ExportDialog
-      v-model="exportDialogVisible"
-      :mindmap-data="mindmapData"
-      @export="handleExport"
-    />
+    <div class="mindmap-container">
+      <EnhancedMindMap 
+        v-if="mindmapData"
+        :data="mindmapData" 
+        :show-animation="true"
+        @node-click="handleNodeClick"
+        @node-update="handleNodeUpdate"
+        @data-change="handleDataChange"
+      />
+      
+      <div v-else class="loading-state">
+        <el-icon class="loading-icon"><Loading /></el-icon>
+        <span>加载中...</span>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, onMounted, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import {
-  Plus,
-  Close
-} from '@element-plus/icons-vue'
+import { ArrowLeft, Document, Loading } from '@element-plus/icons-vue'
+import EnhancedMindMap from '@/components/EnhancedMindMap/index.vue'
 
-
-
-import { mindmapApi } from '@/api/testCase'
-import ProductionMindMap from '@/components/ProductionMindMap/index.vue'
-
-const route = useRoute()
 const router = useRouter()
+const route = useRoute()
 
-const loading = ref(false)
-const mindmapData = ref(null)
-const selectedNode = ref(null)
-const mindmapContainer = ref<HTMLElement>()
+// 响应式数据
+const mindmapData = ref<any>(null)
+const saving = ref(false)
+const lastSaved = ref<Date>(new Date())
 
+// 计算属性
+const mindmapTitle = computed(() => {
+  return mindmapData.value?.mind_map_data?.label || '思维导图'
+})
 
+const lastSavedText = computed(() => {
+  const now = new Date()
+  const diff = now.getTime() - lastSaved.value.getTime()
+  const minutes = Math.floor(diff / (1000 * 60))
+  
+  if (minutes < 1) {
+    return '刚刚保存'
+  } else if (minutes < 60) {
+    return `${minutes}分钟前保存`
+  } else {
+    const hours = Math.floor(minutes / 60)
+    return `${hours}小时前保存`
+  }
+})
 
-// 会话ID
-const sessionId = computed(() => route.params.sessionId as string)
+// 方法
+const goBack = () => {
+  router.push({ name: 'MindmapList' })
+}
 
+const loadMindmapData = () => {
+  const mindmapId = route.params.id
 
-
-
-
-// 加载思维导图数据
-const loadMindmapData = async () => {
-  try {
-    loading.value = true
-
-    // 如果有会话ID，尝试从API加载数据
-    if (sessionId.value) {
-      try {
-        const data = await mindmapApi.getMindmapBySession(sessionId.value)
-        mindmapData.value = data
-        return
-      } catch (error) {
-        console.warn('从API加载思维导图失败，使用默认数据:', error)
-      }
+  // 从 sessionStorage 中读取数据
+  const storedData = sessionStorage.getItem(`mindmap_${mindmapId}`)
+  if (storedData) {
+    try {
+      mindmapData.value = JSON.parse(storedData)
+    } catch (error) {
+      console.error('解析思维导图数据失败:', error)
+      loadFromAPI(mindmapId)
     }
-
-    // 使用默认测试数据
-    console.log('加载默认测试数据')
-    mindmapData.value = {
-      id: 'root',
-      title: '测试用例思维导图',
-      type: 'root',
-      children: [
-        {
-          id: 'functional',
-          title: '功能测试',
-          type: 'category',
-          children: [
-            {
-              id: 'login',
-              title: '登录功能',
-              type: 'module',
-              children: [
-                {
-                  id: 'login-valid',
-                  title: '有效登录',
-                  type: 'testcase',
-                  description: '使用有效的用户名和密码进行登录',
-                  priority: 'high',
-                  status: 'passed'
-                },
-                {
-                  id: 'login-invalid',
-                  title: '无效登录',
-                  type: 'testcase',
-                  description: '使用无效的用户名或密码进行登录',
-                  priority: 'high',
-                  status: 'failed'
-                }
-              ]
-            },
-            {
-              id: 'user-management',
-              title: '用户管理',
-              type: 'module',
-              children: [
-                {
-                  id: 'create-user',
-                  title: '创建用户',
-                  type: 'testcase',
-                  description: '创建新用户账户',
-                  priority: 'medium',
-                  status: 'pending'
-                },
-                {
-                  id: 'edit-user',
-                  title: '编辑用户',
-                  type: 'testcase',
-                  description: '编辑现有用户信息',
-                  priority: 'medium',
-                  status: 'passed'
-                }
-              ]
-            }
-          ]
-        },
-        {
-          id: 'performance',
-          title: '性能测试',
-          type: 'category',
-          children: [
-            {
-              id: 'load-test',
-              title: '负载测试',
-              type: 'testcase',
-              description: '测试系统在正常负载下的性能',
-              priority: 'high',
-              status: 'passed'
-            },
-            {
-              id: 'stress-test',
-              title: '压力测试',
-              type: 'testcase',
-              description: '测试系统在高负载下的性能',
-              priority: 'medium',
-              status: 'pending'
-            }
-          ]
-        },
-        {
-          id: 'security',
-          title: '安全测试',
-          type: 'category',
-          children: [
-            {
-              id: 'auth-test',
-              title: '身份验证测试',
-              type: 'testcase',
-              description: '测试身份验证机制的安全性',
-              priority: 'high',
-              status: 'passed'
-            },
-            {
-              id: 'sql-injection',
-              title: 'SQL注入测试',
-              type: 'testcase',
-              description: '测试系统对SQL注入攻击的防护',
-              priority: 'high',
-              status: 'failed'
-            }
-          ]
-        }
-      ]
-    }
-  } catch (error) {
-    console.error('加载思维导图失败:', error)
-    ElMessage.error('加载思维导图失败')
-  } finally {
-    loading.value = false
-    console.log('思维导图数据加载完成:', mindmapData.value)
+  } else {
+    // 如果没有存储数据，从API加载或创建默认数据
+    loadFromAPI(mindmapId)
   }
 }
 
-// 生成思维导图
-const generateMindmap = async () => {
-  try {
-    loading.value = true
-    // 这里应该调用生成思维导图的API
-    ElMessage.info('正在生成思维导图，请稍候...')
-    
-    // 模拟生成过程
-    setTimeout(() => {
-      mindmapData.value = {
-        id: 'root',
-        title: '测试用例思维导图',
-        type: 'root',
+const loadFromAPI = (id: any) => {
+  // 模拟API加载
+  console.log('从API加载思维导图数据，ID:', id)
+  setTimeout(() => {
+    mindmapData.value = {
+      mind_map_data: {
+        id: 'center',
+        label: `思维导图 ${id}`,
+        type: 'center',
+        level: 0,
         children: [
           {
-            id: 'functional',
-            title: '功能测试',
-            type: 'category',
-            children: [
-              {
-                id: 'login',
-                title: '用户登录',
-                type: 'testcase',
-                description: '测试用户登录功能',
-                testSteps: [
-                  { step: 1, action: '打开登录页面' },
-                  { step: 2, action: '输入用户名和密码' },
-                  { step: 3, action: '点击登录按钮' }
-                ],
-                tags: ['登录', '认证']
-              }
-            ]
+            id: 'sample1',
+            label: '示例分支1',
+            type: 'branch',
+            level: 1,
+            side: 'left',
+            children: []
+          },
+          {
+            id: 'sample2',
+            label: '示例分支2',
+            type: 'branch',
+            level: 1,
+            side: 'right',
+            children: []
           }
         ]
       }
-      loading.value = false
-      ElMessage.success('思维导图生成完成')
-    }, 2000)
+    }
+  }, 500)
+}
+
+const saveMindmap = async () => {
+  if (!mindmapData.value) return
+  
+  saving.value = true
+  
+  try {
+    // 模拟保存API调用
+    await new Promise(resolve => setTimeout(resolve, 1000))
     
+    lastSaved.value = new Date()
+    ElMessage.success('思维导图已保存')
   } catch (error) {
-    console.error('生成思维导图失败:', error)
-    ElMessage.error('生成思维导图失败')
-    loading.value = false
+    ElMessage.error('保存失败，请重试')
+  } finally {
+    saving.value = false
   }
 }
 
-
-
-
-
-
-
-// 节点操作
 const handleNodeClick = (node: any) => {
-  selectedNode.value = node
+  console.log('节点被点击:', node)
 }
 
-
-
-const closeSidePanel = () => {
-  selectedNode.value = null
+const handleNodeUpdate = (node: any) => {
+  console.log('节点已更新:', node)
+  // 标记为有未保存的更改
 }
 
-// 获取节点类型标签
-const getNodeTypeTag = (type: string) => {
-  const tagMap: Record<string, string> = {
-    'root': 'primary',
-    'category': 'success',
-    'testcase': 'warning',
-    'step': 'info'
-  }
-  return tagMap[type] || 'info'
+const handleDataChange = (data: any) => {
+  console.log('数据已变更:', data)
+  mindmapData.value = data
+  // 可以在这里实现自动保存
 }
 
-const getNodeTypeLabel = (type: string) => {
-  const labelMap: Record<string, string> = {
-    'root': '根节点',
-    'category': '分类',
-    'testcase': '测试用例',
-    'step': '测试步骤'
-  }
-  return labelMap[type] || type
-}
-
-
-
-
-
+// 生命周期
 onMounted(() => {
-  console.log('思维导图页面已挂载')
   loadMindmapData()
 })
 </script>
 
 <style lang="scss" scoped>
-.mindmap-page {
+.mindmap-detail {
   height: 100vh;
-  width: 100vw;
-  position: relative;
-  overflow: hidden;
-  
+  display: flex;
+  flex-direction: column;
+  background: #f5f7fa;
 
-  
+  .detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    background: white;
+    border-bottom: 1px solid #e5e7eb;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 
-
-  .mindmap-container {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 100%;
-    height: 100%;
-
-    .loading-container,
-    .empty-container {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
+    .header-left {
       display: flex;
       align-items: center;
-      justify-content: center;
-      background: #f5f5f5;
+      gap: 16px;
+
+      .title-section {
+        h1 {
+          margin: 0;
+          font-size: 20px;
+          font-weight: 600;
+          color: #1f2937;
+          line-height: 1.2;
+        }
+
+        .last-saved {
+          font-size: 12px;
+          color: #6b7280;
+        }
+      }
     }
 
-    .mindmap-content {
-      height: 100%;
-      width: 100%;
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
   }
-  
-  .side-panel {
-    position: fixed;
-    top: 80px;
-    right: 20px;
-    width: 300px;
-    max-height: calc(100vh - 100px);
-    z-index: 1000;
-    
-    .panel-header {
+
+  .mindmap-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+
+    .loading-state {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
       display: flex;
-      justify-content: space-between;
+      flex-direction: column;
       align-items: center;
+      gap: 12px;
+      color: #6b7280;
+
+      .loading-icon {
+        font-size: 32px;
+        animation: spin 1s linear infinite;
+      }
+
+      span {
+        font-size: 14px;
+      }
     }
-    
-    .node-details {
-      .detail-item {
-        margin-bottom: 16px;
-        
-        label {
-          display: block;
-          font-size: 14px;
-          color: var(--el-text-color-regular);
-          margin-bottom: 4px;
-        }
-        
-        .test-steps {
-          .step-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 4px;
-            font-size: 13px;
-            
-            .step-number {
-              display: inline-flex;
-              align-items: center;
-              justify-content: center;
-              width: 18px;
-              height: 18px;
-              background-color: var(--el-color-primary-light-8);
-              color: var(--el-color-primary);
-              border-radius: 50%;
-              font-size: 12px;
-              flex-shrink: 0;
-            }
-            
-            .step-action {
-              flex: 1;
-            }
-          }
-        }
-        
-        .tags {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 4px;
-        }
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 768px) {
+  .mindmap-detail {
+    .detail-header {
+      padding: 12px 16px;
+      flex-direction: column;
+      gap: 12px;
+      align-items: stretch;
+
+      .header-left,
+      .header-right {
+        justify-content: center;
       }
     }
   }

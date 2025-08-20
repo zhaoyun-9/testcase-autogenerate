@@ -61,11 +61,7 @@ class DocumentParserAgent(BaseAgent):
         logger.info(f"文档解析智能体初始化完成: {self.agent_name}")
 
     @message_handler
-    async def handle_document_parse_request(
-        self,
-        message: DocumentParseRequest,
-        ctx: MessageContext
-    ) -> None:
+    async def handle_document_parse_request(self, message: DocumentParseRequest, ctx: MessageContext) -> None:
         """处理文档解析请求"""
         start_time = datetime.now()
 
@@ -103,9 +99,7 @@ class DocumentParserAgent(BaseAgent):
 
             # 生成测试用例
             await self.send_response("🔄 第2步: 基于文档内容生成测试用例...", region="progress")
-            test_cases = await self._generate_test_cases_from_document(
-                parse_result, message
-            )
+            test_cases = await self._generate_test_cases_from_document(parse_result, message)
 
             # 发送测试用例生成结果
             await self.send_response(
@@ -510,9 +504,7 @@ class DocumentParserAgent(BaseAgent):
                     ag_image = AGImage(pil_image)
 
                     # 使用多模态模型解析页面内容
-                    page_content = await self._analyze_pdf_page_with_multimodal(
-                        ag_image, page_num + 1, total_pages
-                    )
+                    page_content = await self._analyze_pdf_page_with_multimodal(ag_image, page_num + 1, total_pages)
 
                     page_time = (datetime.now() - page_start_time).total_seconds()
 
@@ -754,8 +746,9 @@ class DocumentParserAgent(BaseAgent):
             logger.error(f"处理页面内容格式失败: {str(e)}")
             return content
 
+    """解析DOCX文档"""
     async def _parse_docx(self, file_path: Path) -> str:
-        """解析DOCX文档"""
+
         try:
             from docx import Document
             
@@ -836,12 +829,8 @@ class DocumentParserAgent(BaseAgent):
             logger.error(f"Markdown解析失败: {str(e)}")
             raise
 
-    async def _analyze_document_content(
-        self, 
-        content: str, 
-        message: DocumentParseRequest
-    ) -> DocumentParseResult:
-        """使用AI分析文档内容"""
+    """使用AI分析文档内容"""
+    async def _analyze_document_content(self, content: str, message: DocumentParseRequest) -> DocumentParseResult:
         try:
             # 创建AI分析智能体
             agent = self._create_document_analysis_agent()
@@ -868,8 +857,9 @@ class DocumentParserAgent(BaseAgent):
                 confidence_score=0.5
             )
 
+    """创建文档分析智能体"""
     def _create_document_analysis_agent(self):
-        """创建文档分析智能体"""
+
         from app.agents.factory import agent_factory
 
         return agent_factory.create_assistant_agent(
@@ -877,9 +867,10 @@ class DocumentParserAgent(BaseAgent):
             system_message=self._build_document_analysis_system_prompt(),
             model_client_type="deepseek"
         )
-
+    
+    """构建文档分析系统提示"""
     def _build_document_analysis_system_prompt(self) -> str:
-        """构建文档分析系统提示"""
+
         return """
 你是专业的需求文档分析专家，擅长从各种文档中提取测试相关信息。
 
@@ -928,12 +919,8 @@ class DocumentParserAgent(BaseAgent):
 - 确保返回有效的JSON格式,去掉 ```json 和 ```
 """
 
-    def _build_document_analysis_prompt(
-        self, 
-        content: str, 
-        message: DocumentParseRequest
-    ) -> str:
-        """构建文档分析提示"""
+    """构建文档分析用户提示"""
+    def _build_document_analysis_prompt(self, content: str, message: DocumentParseRequest) -> str:
         return f"""
 请分析以下需求文档，提取测试相关信息：
 
@@ -947,8 +934,8 @@ class DocumentParserAgent(BaseAgent):
 请根据文档内容，识别所有可测试的功能点和业务流程，生成对应的测试场景。
 """
 
+    """执行AI分析"""
     async def _run_ai_analysis(self, agent, prompt: str) -> str:
-        """执行AI分析"""
         try:
             stream = agent.run_stream(task=prompt)
             async for event in stream:  # type: ignore
@@ -990,11 +977,7 @@ class DocumentParserAgent(BaseAgent):
 }
 """
 
-    def _parse_ai_analysis_result(
-        self, 
-        ai_result: str, 
-        original_content: str
-    ) -> DocumentParseResult:
+    def _parse_ai_analysis_result(self, ai_result: str, original_content: str) -> DocumentParseResult:
         """解析AI分析结果"""
         try:
             # 尝试解析JSON
@@ -1022,11 +1005,7 @@ class DocumentParserAgent(BaseAgent):
                 confidence_score=0.3
             )
 
-    async def _generate_test_cases_from_document(
-        self, 
-        parse_result: DocumentParseResult,
-        message: DocumentParseRequest
-    ) -> List[TestCaseData]:
+    async def _generate_test_cases_from_document(self, parse_result: DocumentParseResult, message: DocumentParseRequest) -> List[TestCaseData]:
         """从文档解析结果生成测试用例"""
         test_cases = []
         
@@ -1120,11 +1099,7 @@ class DocumentParserAgent(BaseAgent):
         except Exception as e:
             logger.error(f"发送到测试用例生成智能体失败: {str(e)}")
 
-    async def _save_requirements_to_database(
-        self,
-        parse_result: DocumentParseResult,
-        message: DocumentParseRequest
-    ) -> None:
+    async def _save_requirements_to_database(self, parse_result: DocumentParseResult, message: DocumentParseRequest) -> None:
         """保存需求到数据库"""
         try:
             await self.send_response(

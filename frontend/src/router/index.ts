@@ -27,7 +27,7 @@ const routes: RouteRecordRaw[] = [
     redirect: '/test-case/generate',
     meta: {
       title: '测试用例',
-      icon: 'Document',
+      icon: 'Notebook',
       showInMenu: true
     },
     children: [
@@ -63,23 +63,12 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
-        path: 'mindmap/:sessionId',
-        name: 'TestCaseMindmap',
+        path: 'mindmap/:id',
+        name: 'MindmapDetail',
         component: () => import('@/views/test-case/mindmap/index.vue'),
         meta: {
           title: '思维导图详情',
-          icon: 'Share',
           showInMenu: false
-        }
-      },
-      {
-        path: 'test-mindmap',
-        name: 'TestMindmap',
-        component: () => import('@/views/test-mindmap.vue'),
-        meta: {
-          title: '思维导图测试',
-          icon: 'Share',
-          showInMenu: true
         }
       },
       {
@@ -98,7 +87,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/test-case/session/detail.vue'),
         meta: {
           title: '会话详情',
-          icon: 'Document',
+          icon: 'Notebook',
           showInMenu: false
         }
       },
@@ -111,7 +100,8 @@ const routes: RouteRecordRaw[] = [
           icon: 'Files',
           showInMenu: true
         }
-      }
+      },
+
     ]
   },
   {

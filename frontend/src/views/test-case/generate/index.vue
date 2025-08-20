@@ -23,7 +23,7 @@
                 <!-- 快速统计 -->
                 <div class="quick-stats">
                   <div class="stat-item">
-                    <el-icon class="stat-icon"><Document /></el-icon>
+                    <el-icon class="stat-icon"><Notebook /></el-icon>
                     <div class="stat-content">
                       <span class="stat-value">{{ generatedTestCases.length }}</span>
                       <span class="stat-label">已生成</span>
@@ -566,6 +566,7 @@ import {
   Download,
   Share,
   Document,
+  Notebook,
   Clock,
   Monitor,
   Delete,

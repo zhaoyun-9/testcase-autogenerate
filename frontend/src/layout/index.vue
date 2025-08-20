@@ -9,7 +9,7 @@
         <div class="logo">
           <div class="logo-icon">
             <el-icon size="32">
-              <Document />
+              <Notebook />
             </el-icon>
           </div>
           <div v-show="!appStore.sidebarCollapsed" class="logo-content">
@@ -137,6 +137,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAppStore } from '@/stores'
 import {
   Document,
+  Notebook,
   Expand,
   Files,
   Fold,
@@ -187,7 +188,7 @@ const menuRoutes = computed(() => {
       path: '/test-case',
       meta: {
         title: '用例管理',
-        icon: 'Document'
+        icon: 'Notebook'
       },
       children: [
         {
