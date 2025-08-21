@@ -123,6 +123,10 @@ async def get_sessions(
                     logger.warning(f"未知的会话状态: {row.status}")
                     status_enum = SessionStatus.CREATED  # 默认值
 
+                # 处理日期字段，确保不为None
+                from datetime import datetime
+                default_time = datetime.now().isoformat()
+
                 items.append(SessionResponse(
                     id=row.id,
                     session_type=session_type_enum,
@@ -136,8 +140,8 @@ async def get_sessions(
                     generated_count=row.generated_count or 0,
                     started_at=row.started_at.isoformat() if row.started_at else None,
                     completed_at=row.completed_at.isoformat() if row.completed_at else None,
-                    created_at=row.created_at.isoformat(),
-                    updated_at=row.updated_at.isoformat()
+                    created_at=row.created_at.isoformat() if row.created_at else default_time,
+                    updated_at=row.updated_at.isoformat() if row.updated_at else default_time
                 ))
 
             return SessionListResponse(
@@ -188,6 +192,10 @@ async def get_session(session_id: str):
                 logger.warning(f"未知的会话状态: {row.status}")
                 status_enum = SessionStatus.CREATED  # 默认值
 
+            # 处理日期字段，确保不为None
+            from datetime import datetime
+            default_time = datetime.now().isoformat()
+
             return SessionResponse(
                 id=row.id,
                 session_type=session_type_enum,
@@ -201,8 +209,8 @@ async def get_session(session_id: str):
                 generated_count=row.generated_count or 0,
                 started_at=row.started_at.isoformat() if row.started_at else None,
                 completed_at=row.completed_at.isoformat() if row.completed_at else None,
-                created_at=row.created_at.isoformat(),
-                updated_at=row.updated_at.isoformat()
+                created_at=row.created_at.isoformat() if row.created_at else default_time,
+                updated_at=row.updated_at.isoformat() if row.updated_at else default_time
             )
 
     except HTTPException:

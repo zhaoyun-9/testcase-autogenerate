@@ -8,16 +8,17 @@
       <div class="sidebar-header">
         <div class="logo">
           <div class="logo-icon">
-            <el-icon size="32">
-              <Notebook />
+            <el-icon size="28">
+              <Lightning />
             </el-icon>
+            <div class="logo-icon-bg"></div>
           </div>
           <div v-show="!appStore.sidebarCollapsed" class="logo-content">
             <span class="logo-text gradient-text">
-              TestCase
+              AutoTest Pro
             </span>
             <span class="logo-subtitle">
-              测试用例生成平台
+              智能化测试生成器
             </span>
           </div>
         </div>
@@ -137,10 +138,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAppStore } from '@/stores'
 import {
   Document,
-  Notebook,
   Expand,
   Files,
   Fold,
+  Lightning,
   Moon,
   Sunny,
   User
@@ -169,26 +170,10 @@ const menuRoutes = computed(() => {
       }
     },
     {
-      path: '/project',
-      meta: {
-        title: '项目管理',
-        icon: 'Folder'
-      },
-      children: [
-        {
-          path: '/project/list',
-          meta: {
-            title: '项目列表',
-            icon: 'List'
-          }
-        }
-      ]
-    },
-    {
       path: '/test-case',
       meta: {
-        title: '用例管理',
-        icon: 'Notebook'
+        title: '测试用例',
+        icon: 'Document'
       },
       children: [
         {
@@ -229,7 +214,22 @@ const menuRoutes = computed(() => {
         }
       ]
     },
-
+    {
+      path: '/project',
+      meta: {
+        title: '项目管理',
+        icon: 'Folder'
+      },
+      children: [
+        {
+          path: '/project/list',
+          meta: {
+            title: '项目列表',
+            icon: 'List'
+          }
+        }
+      ]
+    },
     {
       path: '/settings',
       meta: {
@@ -327,8 +327,19 @@ const breadcrumbs = computed(() => {
     align-items: center;
     padding: 0 var(--spacing-lg);
     border-bottom: 1px solid var(--border-color-light);
-    background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+    background: linear-gradient(135deg, #fafafa 0%, #f3f4f6 50%, #e5e7eb 100%);
     position: relative;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.03) 0%, rgba(6, 182, 212, 0.03) 50%, rgba(16, 185, 129, 0.03) 100%);
+      pointer-events: none;
+    }
 
     .logo {
       display: flex;
@@ -338,17 +349,41 @@ const breadcrumbs = computed(() => {
       .logo-icon {
         width: 48px;
         height: 48px;
-        background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
-        border-radius: var(--border-radius-lg);
+        background: linear-gradient(135deg, #8b5cf6 0%, #06b6d4 50%, #10b981 100%);
+        border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
         color: white;
-        box-shadow: var(--shadow-md);
-        transition: transform 0.3s ease;
+        box-shadow: 0 8px 32px rgba(139, 92, 246, 0.3);
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+
+        &::before {
+          content: '';
+          position: absolute;
+          top: -50%;
+          left: -50%;
+          width: 200%;
+          height: 200%;
+          background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+          transform: rotate(-45deg);
+          transition: transform 0.6s ease;
+        }
 
         &:hover {
-          transform: scale(1.05);
+          transform: scale(1.1) rotate(5deg);
+          box-shadow: 0 12px 40px rgba(139, 92, 246, 0.4);
+
+          &::before {
+            transform: rotate(-45deg) translate(100%, 100%);
+          }
+        }
+
+        .el-icon {
+          z-index: 2;
+          position: relative;
         }
       }
 
@@ -357,17 +392,26 @@ const breadcrumbs = computed(() => {
         flex-direction: column;
 
         .logo-text {
-          font-size: 20px;
-          font-weight: 700;
+          font-size: 22px;
+          font-weight: 800;
           line-height: 1.2;
           white-space: nowrap;
+          background: linear-gradient(135deg, #8b5cf6 0%, #06b6d4 50%, #10b981 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          letter-spacing: -0.5px;
+          text-shadow: 0 2px 4px rgba(139, 92, 246, 0.1);
         }
 
         .logo-subtitle {
-          font-size: 12px;
-          color: var(--text-secondary);
-          font-weight: 500;
+          font-size: 11px;
+          color: var(--text-tertiary);
+          font-weight: 600;
           white-space: nowrap;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          opacity: 0.8;
         }
       }
     }
@@ -567,8 +611,16 @@ const breadcrumbs = computed(() => {
     .sidebar-header {
       background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
 
+      &::before {
+        background: linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(6, 182, 212, 0.08) 50%, rgba(16, 185, 129, 0.08) 100%);
+      }
+
       .logo-icon {
-        box-shadow: 0 4px 20px rgba(37, 99, 235, 0.3);
+        box-shadow: 0 8px 32px rgba(139, 92, 246, 0.4);
+
+        &:hover {
+          box-shadow: 0 12px 40px rgba(139, 92, 246, 0.5);
+        }
       }
     }
 

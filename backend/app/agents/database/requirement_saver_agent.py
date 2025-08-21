@@ -79,10 +79,10 @@ class RequirementSaverAgent(BaseAgent):
 
     @message_handler
     async def handle_requirement_save_request(
-        self, 
-        message: RequirementSaveRequest, 
+        self,
+        message: RequirementSaveRequest,
         ctx: MessageContext
-    ) -> RequirementSaveResponse:
+    ) -> None:
         """处理需求保存请求"""
         start_time = datetime.now()
         self.save_metrics["total_requests"] += 1
@@ -97,7 +97,8 @@ class RequirementSaverAgent(BaseAgent):
 
             # 数据验证
             if not await self._validate_save_request(message):
-                return await self._handle_validation_error(message, start_time)
+                await self._handle_validation_error(message, start_time)
+                return
 
             # 批量保存处理
             save_result = await self._save_requirements_with_retry(message)
@@ -118,16 +119,10 @@ class RequirementSaverAgent(BaseAgent):
             # 发送响应
             await self._send_save_response(save_result)
 
-            # 发布保存结果到流式输出
-            await self.publish_message(
-                save_result,
-                topic_id=TopicId(type=TopicTypes.STREAM_OUTPUT.value, source=self.id.key)
-            )
-
-            return save_result
+            logger.info(f"需求保存请求处理完成: {message.session_id}")
 
         except Exception as e:
-            return await self._handle_save_error(message, e, start_time)
+            await self._handle_save_error(message, e, start_time)
 
     async def _validate_save_request(self, message: RequirementSaveRequest) -> bool:
         """验证保存请求"""
@@ -299,10 +294,10 @@ class RequirementSaverAgent(BaseAgent):
         )
 
     async def _handle_validation_error(
-        self, 
-        message: RequirementSaveRequest, 
+        self,
+        message: RequirementSaveRequest,
         start_time: datetime
-    ) -> RequirementSaveResponse:
+    ) -> None:
         """处理验证错误"""
         processing_time = (datetime.now() - start_time).total_seconds()
         
@@ -312,16 +307,15 @@ class RequirementSaverAgent(BaseAgent):
             errors=["请求数据验证失败"],
             processing_time=processing_time
         )
-        
+
         await self._send_save_response(error_response)
-        return error_response
 
     async def _handle_save_error(
-        self, 
-        message: RequirementSaveRequest, 
-        error: Exception, 
+        self,
+        message: RequirementSaveRequest,
+        error: Exception,
         start_time: datetime
-    ) -> RequirementSaveResponse:
+    ) -> None:
         """处理保存错误"""
         processing_time = (datetime.now() - start_time).total_seconds()
         error_msg = f"需求保存失败: {str(error)}"
@@ -335,9 +329,8 @@ class RequirementSaverAgent(BaseAgent):
             errors=[error_msg],
             processing_time=processing_time
         )
-        
+
         await self._send_save_response(error_response)
-        return error_response
 
     async def _send_save_response(self, response: RequirementSaveResponse):
         """发送保存响应"""

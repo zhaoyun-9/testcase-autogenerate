@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     RUN_MODE: str = "development"  # development, debug, production
     
     # 数据库配置
-    DATABASE_URL: str = "mysql+aiomysql://root:12345678@localhost:3306/test_case_automation"
+    DATABASE_URL: str = "mysql+aiomysql://root:mysql@localhost:3306/test_case_automation"
     DATABASE_ECHO: bool = False
     DATABASE_POOL_SIZE: int = 20
     DATABASE_MAX_OVERFLOW: int = 30
@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     MYSQL_HOST: str = "localhost"
     MYSQL_PORT: int = 3306
     MYSQL_USER: str = "root"
-    MYSQL_PASSWORD: str = "12345678"
+    MYSQL_PASSWORD: str = "mysql"
     MYSQL_DATABASE: str = "test_case_automation"
 
     @property

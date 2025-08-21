@@ -16,9 +16,9 @@ from app.agents.database.session_status_agent import SessionStatusAgent, Session
 # 导入消息类型
 from app.core.messages.test_case import (
     DocumentParseRequest, ImageAnalysisRequest, ApiSpecParseRequest,
-    DatabaseSchemaParseRequest, VideoAnalysisRequest, TestCaseGenerationRequest,
+    DatabaseSchemaParseRequest, VideoAnalysisRequest,
     MindMapGenerationRequest, ExcelExportRequest, BatchProcessRequest,
-    DirectRequirementRequest
+    DirectRequirementRequest, RequirementAnalysisRequest
 )
 
 
@@ -195,11 +195,32 @@ class TestCaseAgentOrchestrator:
                 TopicTypes.VIDEO_ANALYZER.value,
             )
 
+            # 注册需求解析智能体
+            await self.agent_factory.register_agent_to_runtime(
+                self.runtime,
+                AgentTypes.REQUIREMENT_ANALYZER.value,
+                TopicTypes.REQUIREMENT_ANALYZER.value,
+            )
+
+            # 注册测试点提取智能体
+            await self.agent_factory.register_agent_to_runtime(
+                self.runtime,
+                AgentTypes.TEST_POINT_EXTRACTOR.value,
+                TopicTypes.TEST_POINT_EXTRACTOR.value,
+            )
+
             # 注册测试用例生成智能体
             await self.agent_factory.register_agent_to_runtime(
                 self.runtime,
                 AgentTypes.TEST_CASE_GENERATOR.value,
                 TopicTypes.TEST_CASE_GENERATOR.value,
+            )
+
+            # 注册RAG知识库检索智能体
+            await self.agent_factory.register_agent_to_runtime(
+                self.runtime,
+                AgentTypes.RAG_RETRIEVAL.value,
+                TopicTypes.RAG_RETRIEVAL.value,
             )
 
             # 注册思维导图生成智能体
@@ -460,6 +481,39 @@ class TestCaseAgentOrchestrator:
         except Exception as e:
             logger.error(f"录屏分析工作流失败: {request.session_id}, 错误: {str(e)}")
             raise
+
+    async def analyze_requirement(self, request: RequirementAnalysisRequest) -> None:
+        """
+        分析需求内容并生成测试用例
+
+        智能体消息流:
+        1. 发送 RequirementAnalysisRequest → REQUIREMENT_ANALYZER 智能体
+        2. RequirementAnalysisAgent 进行企业级需求解析
+        3. RequirementAnalysisAgent 发送 TestCaseGenerationRequest → TEST_CASE_GENERATOR 智能体
+        4. TestCaseGeneratorAgent 生成并保存测试用例
+        5. TestCaseGeneratorAgent 发送 MindMapGenerationRequest → MIND_MAP_GENERATOR 智能体
+        6. MindMapGeneratorAgent 生成思维导图
+
+        Args:
+            request: 需求解析请求
+        """
+        try:
+            logger.info(f"开始需求解析工作流: {request.session_id}")
+
+            # 初始化运行时
+            await self._initialize_runtime(request.session_id)
+
+            # 发送到需求解析智能体
+            await self.runtime.publish_message(
+                request,
+                topic_id=TopicId(type=TopicTypes.REQUIREMENT_ANALYZER.value, source="user")
+            )
+
+            logger.info(f"需求解析工作流启动完成: {request.session_id}")
+
+        except Exception as e:
+            logger.error(f"需求解析工作流启动失败: {str(e)}")
+            raise
         finally:
             await self._cleanup_runtime(request.session_id)
 
@@ -483,44 +537,29 @@ class TestCaseAgentOrchestrator:
             # 初始化运行时
             await self._initialize_runtime(request.session_id)
 
-            # 创建测试用例生成请求
-            from app.core.messages.test_case import TestCaseGenerationRequest
-
-            # 创建基础测试用例数据（直接需求处理时先创建空的测试用例列表）
-            from app.core.messages.test_case import TestCaseData
-            from app.core.enums import TestType, TestLevel, Priority, InputSource
-
-            # 基于需求文本创建初始测试用例
-            initial_test_case = TestCaseData(
-                title=f"基于需求的测试用例",
-                description=request.requirement_text[:200] + "..." if len(request.requirement_text) > 200 else request.requirement_text,
-                test_type=TestType.FUNCTIONAL,
-                test_level=TestLevel.SYSTEM,
-                priority=Priority.P2,
-                input_source=InputSource.MANUAL,
-                ai_confidence=0.8
-            )
-
-            test_case_request = TestCaseGenerationRequest(
+            # 发送到需求分析智能体，使用新的测试点提取流程
+            requirement_analysis_request = RequirementAnalysisRequest(
                 session_id=request.session_id,
+                requirement_content=request.requirement_text,
                 source_type="direct_requirement",
                 source_data={
                     "requirement_text": request.requirement_text,
                     "requirement_title": getattr(request, 'requirement_title', None),
-                    "analysis_target": getattr(request, 'analysis_target', '生成测试用例')
+                    "analysis_target": getattr(request, 'analysis_target', '生成测试用例'),
+                    "input_method": "direct"
                 },
-                test_cases=[initial_test_case],
-                generation_config={
-                    "test_case_format": "standard",
-                    "include_steps": True,
-                    "include_expected_results": True
+                analysis_config={
+                    "enable_detailed_analysis": True,
+                    "extract_business_rules": True,
+                    "identify_stakeholders": True,
+                    "analyze_dependencies": True
                 }
             )
 
-            # 发送到测试用例生成智能体
+            # 发送到需求分析智能体
             await self.runtime.publish_message(
-                test_case_request,
-                topic_id=TopicId(type=TopicTypes.TEST_CASE_GENERATOR.value, source="user")
+                requirement_analysis_request,
+                topic_id=TopicId(type=TopicTypes.REQUIREMENT_ANALYZER.value, source="user")
             )
 
             logger.info(f"直接需求处理工作流启动完成: {request.session_id}")
@@ -749,41 +788,30 @@ class TestCaseAgentOrchestrator:
             # 初始化运行时
             await self._initialize_runtime(request.session_id)
 
-            # 创建测试用例生成请求
-            from app.core.messages.test_case import TestCaseData
-            from app.core.enums import TestType, TestLevel, Priority, InputSource
-
-            initial_test_case = TestCaseData(
-                title=f"基于需求的测试用例: {getattr(request, 'requirement_title', '用户需求')}",
-                description=request.requirement_text,
-                test_type=TestType.FUNCTIONAL,
-                test_level=TestLevel.SYSTEM,
-                priority=Priority.P2,
-                input_source=InputSource.MANUAL,
-                ai_confidence=0.7
-            )
-
-            test_case_request = TestCaseGenerationRequest(
+            # 发送到需求分析智能体，使用新的测试点提取流程
+            requirement_analysis_request = RequirementAnalysisRequest(
                 session_id=request.session_id,
+                requirement_content=request.requirement_text,
                 source_type="direct_requirement",
                 source_data={
                     "requirement_text": request.requirement_text,
                     "requirement_title": getattr(request, 'requirement_title', None),
-                    "analysis_target": getattr(request, 'analysis_target', '生成测试用例')
+                    "analysis_target": getattr(request, 'analysis_target', '生成测试用例'),
+                    "input_method": "direct_workflow"
                 },
-                test_cases=[initial_test_case],
-                generation_config={
-                    "test_case_format": "standard",
-                    "include_steps": True,
-                    "include_expected_results": True,
+                analysis_config={
+                    "enable_detailed_analysis": True,
+                    "extract_business_rules": True,
+                    "identify_stakeholders": True,
+                    "analyze_dependencies": True,
                     "auto_save": True,
                     "generate_mind_map": True
                 }
             )
 
             await self.runtime.publish_message(
-                test_case_request,
-                topic_id=TopicId(type=TopicTypes.TEST_CASE_GENERATOR.value, source="orchestrator")
+                requirement_analysis_request,
+                topic_id=TopicId(type=TopicTypes.REQUIREMENT_ANALYZER.value, source="orchestrator")
             )
 
             await self._complete_workflow(workflow_id, True)

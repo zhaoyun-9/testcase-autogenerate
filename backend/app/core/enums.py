@@ -58,20 +58,20 @@ class ProjectStatus(str, enum.Enum):
 
 class SessionType(str, enum.Enum):
     """会话类型枚举"""
-    DOCUMENT_PARSE = "document_parse"
-    IMAGE_ANALYSIS = "image_analysis"
-    API_SPEC_PARSE = "api_spec_parse"
-    DATABASE_SCHEMA_PARSE = "database_schema_parse"
-    VIDEO_ANALYSIS = "video_analysis"
-    MANUAL_INPUT = "manual_input"
+    DOCUMENT_PARSE = "DOCUMENT_PARSE"
+    IMAGE_ANALYSIS = "IMAGE_ANALYSIS"
+    API_SPEC_PARSE = "API_SPEC_PARSE"
+    DATABASE_SCHEMA_PARSE = "DATABASE_SCHEMA_PARSE"
+    VIDEO_ANALYSIS = "VIDEO_ANALYSIS"
+    MANUAL_INPUT = "MANUAL_INPUT"
 
 
 class SessionStatus(str, enum.Enum):
     """会话状态枚举"""
-    CREATED = "created"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    FAILED = "failed"
+    CREATED = "CREATED"
+    PROCESSING = "PROCESSING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
 
 
 class UploadSource(str, enum.Enum):

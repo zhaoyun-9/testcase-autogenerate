@@ -83,8 +83,8 @@ SUPPORTED_FILE_TYPES = {
     },
     "video": {
         "name": "视频文件",
-        "extensions": [".mp4", ".avi", ".mov", ".wmv", ".flv"],
-        "maxSize": 200,  # MB
+        "extensions": [".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm"],
+        "maxSize": 500,  # MB
         "description": "支持常见视频格式，用于操作流程分析和测试用例生成",
         "agent": "video_analyzer"
     }

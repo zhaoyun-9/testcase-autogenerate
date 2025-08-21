@@ -83,6 +83,7 @@ class TestCaseCreateRequest(BaseModel):
     tags: List[str] = []
     category: Optional[str] = None
     session_id: Optional[str] = None
+    project_id: Optional[str] = None
 
 
 class TestCaseUpdateRequest(BaseModel):

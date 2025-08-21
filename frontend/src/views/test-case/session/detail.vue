@@ -76,9 +76,9 @@
             </div>
             <el-table :data="testCases" v-loading="loading">
               <el-table-column prop="title" label="标题" min-width="200" />
-              <el-table-column prop="test_type" label="类型" width="100">
+              <el-table-column prop="testType" label="类型" width="100">
                 <template #default="{ row }">
-                  <el-tag size="small">{{ row.test_type }}</el-tag>
+                  <el-tag size="small">{{ row.testType }}</el-tag>
                 </template>
               </el-table-column>
               <el-table-column prop="priority" label="优先级" width="80">
@@ -88,9 +88,9 @@
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="created_at" label="创建时间" width="160">
+              <el-table-column prop="createdAt" label="创建时间" width="160">
                 <template #default="{ row }">
-                  {{ formatTime(row.created_at) }}
+                  {{ formatTime(row.createdAt) }}
                 </template>
               </el-table-column>
               <el-table-column label="操作" width="120">
@@ -260,7 +260,26 @@ const loadTestCases = async () => {
       session_id: sessionId.value,
       page_size: 100
     })
-    testCases.value = response.items || []
+    console.log('会话详情页面 - 获取测试用例响应:', response)
+
+    // 转换后端数据格式到前端格式
+    testCases.value = (response.data || []).map(item => ({
+      ...item,
+      testType: item.test_type,
+      testLevel: item.test_level,
+      testSteps: (item.test_steps || []).map((step: any) => ({
+        step: step.step_number || step.step,
+        action: step.action,
+        expectedResult: step.expected || step.expectedResult,
+        data: step.data
+      })),
+      expectedResults: item.expected_results,
+      createdAt: item.created_at,
+      updatedAt: item.updated_at,
+      sessionId: item.session_id
+    }))
+
+    console.log('会话详情页面 - 设置测试用例数据:', testCases.value.length)
   } catch (error) {
     console.error('加载测试用例失败:', error)
   }

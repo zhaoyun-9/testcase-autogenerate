@@ -4,6 +4,7 @@
 遵循单一职责原则，专注于数据持久化操作
 """
 import uuid
+import json
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
@@ -93,10 +94,15 @@ class TestCaseSaverAgent(BaseAgent):
 
         # 保存配置
         self.save_config = {
-            "batch_size": 100,  # 批量保存大小
+            "batch_size": 50,   # 批量保存大小
+            "commit_interval": 10,  # 每处理多少个测试用例提交一次
             "max_retries": 3,   # 最大重试次数
             "retry_delay": 1.0, # 重试延迟（秒）
-            "enable_transaction": True  # 启用事务
+            "enable_transaction": True,  # 启用事务
+            "enable_parallel_processing": False,  # 启用并行处理
+            "max_concurrent_saves": 5,  # 最大并发保存数
+            "enable_batch_validation": True,  # 启用批量验证
+            "rollback_on_error": True  # 错误时回滚
         }
 
         logger.info(f"测试用例保存智能体初始化完成: {self.agent_name}")
@@ -273,72 +279,166 @@ class TestCaseSaverAgent(BaseAgent):
         return error_response
 
     async def _save_test_cases_to_database(self, message: TestCaseSaveRequest) -> TestCaseSaveResponse:
-        """保存测试用例到数据库"""
+        """保存测试用例到数据库 - 优化版本"""
         response = TestCaseSaveResponse(
             session_id=message.session_id,
             success=False
         )
-        
+
+        try:
+            # 批量验证（如果启用）
+            if self.save_config["enable_batch_validation"]:
+                await self.send_response("🔍 正在进行批量数据验证...")
+                validation_results = await self._batch_validate_test_cases(message.test_cases)
+                valid_test_cases = [tc for tc, valid in zip(message.test_cases, validation_results) if valid["is_valid"]]
+                invalid_count = len(message.test_cases) - len(valid_test_cases)
+
+                if invalid_count > 0:
+                    await self.send_response(f"⚠️ 发现 {invalid_count} 个无效测试用例，将跳过保存")
+            else:
+                valid_test_cases = message.test_cases
+
+            # 分批处理
+            batch_size = self.save_config["batch_size"]
+            total_batches = (len(valid_test_cases) + batch_size - 1) // batch_size
+
+            all_saved_test_cases = []
+            all_errors = []
+
+            for batch_index in range(total_batches):
+                start_idx = batch_index * batch_size
+                end_idx = min(start_idx + batch_size, len(valid_test_cases))
+                batch_test_cases = valid_test_cases[start_idx:end_idx]
+
+                await self.send_response(f"📦 正在处理第 {batch_index + 1}/{total_batches} 批数据 ({len(batch_test_cases)} 个测试用例)...")
+
+                # 处理当前批次
+                batch_result = await self._save_test_case_batch(
+                    batch_test_cases, message, start_idx
+                )
+
+                all_saved_test_cases.extend(batch_result["saved_test_cases"])
+                all_errors.extend(batch_result["errors"])
+
+                # 批次间短暂休息，避免数据库压力过大
+                if batch_index < total_batches - 1:
+                    import asyncio
+                    await asyncio.sleep(0.1)
+
+            # 构建最终响应
+            response.success = len(all_saved_test_cases) > 0
+            response.saved_count = len(all_saved_test_cases)
+            response.failed_count = len(all_errors)
+            response.saved_test_cases = all_saved_test_cases
+            response.errors = all_errors
+
+            logger.info(f"批量保存完成: 成功 {response.saved_count} 个，失败 {response.failed_count} 个")
+
+        except Exception as e:
+            logger.error(f"批量保存测试用例异常: {str(e)}")
+            response.success = False
+            response.failed_count = len(message.test_cases)
+            response.errors = [str(e)]
+
+        return response
+
+    async def _batch_validate_test_cases(self, test_cases: List[TestCaseData]) -> List[Dict[str, Any]]:
+        """批量验证测试用例"""
+        validation_results = []
+
+        for test_case_data in test_cases:
+            validation_result = await self.validate_test_case_data(test_case_data)
+            validation_results.append(validation_result)
+
+        return validation_results
+
+    async def _save_test_case_batch(
+        self,
+        batch_test_cases: List[TestCaseData],
+        message: TestCaseSaveRequest,
+        start_index: int
+    ) -> Dict[str, Any]:
+        """保存一批测试用例"""
+        saved_test_cases = []
+        errors = []
+
         try:
             async with db_manager.get_session() as session:
-                saved_test_cases = []
-                errors = []
-                
-                for i, test_case_data in enumerate(message.test_cases):
+                for i, test_case_data in enumerate(batch_test_cases):
+                    global_index = start_index + i + 1
+
                     try:
-                        await self.send_response(f"💾 正在保存第 {i+1}/{len(message.test_cases)} 个测试用例...")
-                        
+                        # 数据验证（如果未进行批量验证）
+                        if not self.save_config["enable_batch_validation"]:
+                            validation_result = await self.validate_test_case_data(test_case_data)
+                            if not validation_result["is_valid"]:
+                                error_msg = f"第 {global_index} 个测试用例数据验证失败: {'; '.join(validation_result['errors'])}"
+                                errors.append(error_msg)
+                                logger.warning(error_msg)
+                                continue
+
+                        # 数据清理和标准化
+                        cleaned_test_case_data = await self.clean_and_normalize_test_case_data(test_case_data)
+
                         # 转换为数据库创建请求
-                        create_request = await self._convert_to_create_request(test_case_data, message)
-                        
+                        create_request = await self._convert_to_create_request(cleaned_test_case_data, message)
+
                         # 保存到数据库
                         saved_test_case = await self.test_case_repository.create_test_case(
                             session,
                             create_request
                         )
-                        
+
                         # 保存测试用例与需求的关联关系
                         await self._save_test_case_requirements(
-                            session, saved_test_case.id, test_case_data, message
+                            session, saved_test_case.id, cleaned_test_case_data, message
                         )
 
                         # 记录成功保存的测试用例
-                        saved_test_cases.append({
+                        saved_test_case_info = {
                             "id": saved_test_case.id,
                             "title": saved_test_case.title,
                             "test_type": saved_test_case.test_type.value,
                             "test_level": saved_test_case.test_level.value,
                             "priority": saved_test_case.priority.value,
-                            "status": saved_test_case.status.value
-                        })
+                            "status": saved_test_case.status.value,
+                            "created_at": saved_test_case.created_at.isoformat() if saved_test_case.created_at else None,
+                            "ai_confidence": saved_test_case.ai_confidence,
+                            "input_source": saved_test_case.input_source.value if saved_test_case.input_source else None
+                        }
+                        saved_test_cases.append(saved_test_case_info)
 
                         logger.info(f"成功保存测试用例: {saved_test_case.title}")
-                        
+
+                        # 按配置的间隔提交
+                        if (i + 1) % self.save_config["commit_interval"] == 0:
+                            await session.commit()
+
                     except Exception as e:
-                        error_msg = f"保存第 {i+1} 个测试用例失败: {str(e)}"
+                        error_msg = f"保存第 {global_index} 个测试用例失败: {str(e)}"
                         errors.append(error_msg)
                         logger.error(error_msg)
+
+                        # 记录详细错误信息
+                        await self._log_save_error(test_case_data, e, global_index)
+
+                        # 如果启用错误回滚，回滚当前事务
+                        if self.save_config["rollback_on_error"]:
+                            await session.rollback()
+                            break
                         continue
-                
-                # 提交事务
+
+                # 最终提交
                 await session.commit()
-                
-                # 构建响应
-                response.success = len(saved_test_cases) > 0
-                response.saved_count = len(saved_test_cases)
-                response.failed_count = len(errors)
-                response.saved_test_cases = saved_test_cases
-                response.errors = errors
-                
-                logger.info(f"测试用例保存完成: 成功 {response.saved_count} 个，失败 {response.failed_count} 个")
-                
+
         except Exception as e:
-            logger.error(f"保存测试用例到数据库异常: {str(e)}")
-            response.success = False
-            response.failed_count = len(message.test_cases)
-            response.errors = [str(e)]
-        
-        return response
+            logger.error(f"批次保存异常: {str(e)}")
+            errors.append(f"批次保存异常: {str(e)}")
+
+        return {
+            "saved_test_cases": saved_test_cases,
+            "errors": errors
+        }
 
     async def _validate_project_id(self, project_id: Optional[str]) -> Optional[str]:
         """
@@ -555,6 +655,322 @@ class TestCaseSaverAgent(BaseAgent):
         """获取当前保存配置"""
         return self.save_config.copy()
 
+    async def validate_test_case_data(self, test_case_data: TestCaseData) -> Dict[str, Any]:
+        """验证测试用例数据的完整性和有效性"""
+        validation_result = {
+            "is_valid": True,
+            "errors": [],
+            "warnings": [],
+            "suggestions": []
+        }
+
+        # 必填字段验证
+        if not test_case_data.title or not test_case_data.title.strip():
+            validation_result["is_valid"] = False
+            validation_result["errors"].append("测试用例标题不能为空")
+
+        # 标题长度验证
+        if test_case_data.title and len(test_case_data.title) > 500:
+            validation_result["is_valid"] = False
+            validation_result["errors"].append("测试用例标题长度不能超过500字符")
+
+        # 测试步骤验证
+        if not test_case_data.test_steps:
+            validation_result["warnings"].append("测试步骤为空，建议添加详细的测试步骤")
+        elif isinstance(test_case_data.test_steps, list) and len(test_case_data.test_steps) == 0:
+            validation_result["warnings"].append("测试步骤列表为空")
+
+        # 预期结果验证
+        if not test_case_data.expected_results:
+            validation_result["warnings"].append("预期结果为空，建议添加明确的预期结果")
+
+        # 枚举值验证
+        try:
+            if test_case_data.test_type not in [t.value for t in TestType]:
+                validation_result["errors"].append(f"无效的测试类型: {test_case_data.test_type}")
+        except:
+            validation_result["errors"].append("测试类型格式错误")
+
+        try:
+            if test_case_data.test_level not in [l.value for l in TestLevel]:
+                validation_result["errors"].append(f"无效的测试级别: {test_case_data.test_level}")
+        except:
+            validation_result["errors"].append("测试级别格式错误")
+
+        try:
+            if test_case_data.priority not in [p.value for p in Priority]:
+                validation_result["errors"].append(f"无效的优先级: {test_case_data.priority}")
+        except:
+            validation_result["errors"].append("优先级格式错误")
+
+        # AI置信度验证
+        if hasattr(test_case_data, 'ai_confidence') and test_case_data.ai_confidence is not None:
+            if not (0 <= test_case_data.ai_confidence <= 1):
+                validation_result["warnings"].append("AI置信度应该在0-1之间")
+
+        # 提供改进建议
+        if test_case_data.title and len(test_case_data.title) < 10:
+            validation_result["suggestions"].append("建议测试用例标题更加详细和描述性")
+
+        if not test_case_data.description:
+            validation_result["suggestions"].append("建议添加测试用例描述以提高可读性")
+
+        return validation_result
+
+    async def clean_and_normalize_test_case_data(self, test_case_data: TestCaseData) -> TestCaseData:
+        """清理和标准化测试用例数据"""
+        try:
+            # 清理标题
+            if test_case_data.title:
+                test_case_data.title = test_case_data.title.strip()
+                # 移除多余的空格
+                test_case_data.title = ' '.join(test_case_data.title.split())
+
+            # 清理描述
+            if test_case_data.description:
+                test_case_data.description = test_case_data.description.strip()
+
+            # 清理前置条件
+            if test_case_data.preconditions:
+                test_case_data.preconditions = self._normalize_string_field(test_case_data.preconditions)
+
+            # 清理预期结果
+            if test_case_data.expected_results:
+                test_case_data.expected_results = self._normalize_string_field(test_case_data.expected_results)
+
+            # 标准化测试步骤
+            if test_case_data.test_steps:
+                test_case_data.test_steps = await self._normalize_test_steps(test_case_data.test_steps)
+
+            # 标准化标签
+            if hasattr(test_case_data, 'tags') and test_case_data.tags:
+                test_case_data.tags = self._normalize_tags(test_case_data.tags)
+
+            return test_case_data
+
+        except Exception as e:
+            logger.warning(f"清理测试用例数据失败: {str(e)}")
+            return test_case_data
+
+    async def _normalize_test_steps(self, test_steps) -> List[Dict[str, Any]]:
+        """标准化测试步骤格式"""
+        if not test_steps:
+            return []
+
+        normalized_steps = []
+
+        if isinstance(test_steps, str):
+            # 如果是字符串，按行分割
+            lines = test_steps.split('\n')
+            for i, line in enumerate(lines, 1):
+                if line.strip():
+                    normalized_steps.append({
+                        "step_number": i,
+                        "action": line.strip(),
+                        "data": "",
+                        "expected": ""
+                    })
+        elif isinstance(test_steps, list):
+            for i, step in enumerate(test_steps, 1):
+                if isinstance(step, dict):
+                    # 确保包含必要字段
+                    normalized_step = {
+                        "step_number": step.get("step_number", i),
+                        "action": step.get("action", ""),
+                        "data": step.get("data", ""),
+                        "expected": step.get("expected", "")
+                    }
+                    normalized_steps.append(normalized_step)
+                elif isinstance(step, str):
+                    normalized_steps.append({
+                        "step_number": i,
+                        "action": step.strip(),
+                        "data": "",
+                        "expected": ""
+                    })
+
+        return normalized_steps
+
+    def _normalize_tags(self, tags) -> List[str]:
+        """标准化标签"""
+        if not tags:
+            return []
+
+        normalized_tags = []
+
+        if isinstance(tags, str):
+            # 如果是字符串，按逗号分割
+            tag_list = tags.split(',')
+            for tag in tag_list:
+                clean_tag = tag.strip()
+                if clean_tag and clean_tag not in normalized_tags:
+                    normalized_tags.append(clean_tag)
+        elif isinstance(tags, list):
+            for tag in tags:
+                clean_tag = str(tag).strip()
+                if clean_tag and clean_tag not in normalized_tags:
+                    normalized_tags.append(clean_tag)
+
+        return normalized_tags[:10]  # 限制最多10个标签
+
+    async def validate_test_case_data(self, test_case_data: TestCaseData) -> Dict[str, Any]:
+        """验证测试用例数据的完整性和有效性"""
+        validation_result = {
+            "is_valid": True,
+            "errors": [],
+            "warnings": [],
+            "suggestions": []
+        }
+
+        # 必填字段验证
+        if not test_case_data.title or not test_case_data.title.strip():
+            validation_result["is_valid"] = False
+            validation_result["errors"].append("测试用例标题不能为空")
+
+        # 标题长度验证
+        if test_case_data.title and len(test_case_data.title) > 500:
+            validation_result["is_valid"] = False
+            validation_result["errors"].append("测试用例标题长度不能超过500字符")
+
+        # 测试步骤验证
+        if not test_case_data.test_steps:
+            validation_result["warnings"].append("测试步骤为空，建议添加详细的测试步骤")
+        elif isinstance(test_case_data.test_steps, list) and len(test_case_data.test_steps) == 0:
+            validation_result["warnings"].append("测试步骤列表为空")
+
+        # 预期结果验证
+        if not test_case_data.expected_results:
+            validation_result["warnings"].append("预期结果为空，建议添加明确的预期结果")
+
+        # 枚举值验证
+        try:
+            if test_case_data.test_type not in [t.value for t in TestType]:
+                validation_result["errors"].append(f"无效的测试类型: {test_case_data.test_type}")
+        except:
+            validation_result["errors"].append("测试类型格式错误")
+
+        try:
+            if test_case_data.test_level not in [l.value for l in TestLevel]:
+                validation_result["errors"].append(f"无效的测试级别: {test_case_data.test_level}")
+        except:
+            validation_result["errors"].append("测试级别格式错误")
+
+        try:
+            if test_case_data.priority not in [p.value for p in Priority]:
+                validation_result["errors"].append(f"无效的优先级: {test_case_data.priority}")
+        except:
+            validation_result["errors"].append("优先级格式错误")
+
+        # AI置信度验证
+        if hasattr(test_case_data, 'ai_confidence') and test_case_data.ai_confidence is not None:
+            if not (0 <= test_case_data.ai_confidence <= 1):
+                validation_result["warnings"].append("AI置信度应该在0-1之间")
+
+        # 提供改进建议
+        if test_case_data.title and len(test_case_data.title) < 10:
+            validation_result["suggestions"].append("建议测试用例标题更加详细和描述性")
+
+        if not test_case_data.description:
+            validation_result["suggestions"].append("建议添加测试用例描述以提高可读性")
+
+        return validation_result
+
+    async def clean_and_normalize_test_case_data(self, test_case_data: TestCaseData) -> TestCaseData:
+        """清理和标准化测试用例数据"""
+        try:
+            # 清理标题
+            if test_case_data.title:
+                test_case_data.title = test_case_data.title.strip()
+                # 移除多余的空格
+                test_case_data.title = ' '.join(test_case_data.title.split())
+
+            # 清理描述
+            if test_case_data.description:
+                test_case_data.description = test_case_data.description.strip()
+
+            # 清理前置条件
+            if test_case_data.preconditions:
+                test_case_data.preconditions = self._normalize_string_field(test_case_data.preconditions)
+
+            # 清理预期结果
+            if test_case_data.expected_results:
+                test_case_data.expected_results = self._normalize_string_field(test_case_data.expected_results)
+
+            # 标准化测试步骤
+            if test_case_data.test_steps:
+                test_case_data.test_steps = await self._normalize_test_steps(test_case_data.test_steps)
+
+            # 标准化标签
+            if hasattr(test_case_data, 'tags') and test_case_data.tags:
+                test_case_data.tags = self._normalize_tags(test_case_data.tags)
+
+            return test_case_data
+
+        except Exception as e:
+            logger.warning(f"清理测试用例数据失败: {str(e)}")
+            return test_case_data
+
+    async def _normalize_test_steps(self, test_steps) -> List[Dict[str, Any]]:
+        """标准化测试步骤格式"""
+        if not test_steps:
+            return []
+
+        normalized_steps = []
+
+        if isinstance(test_steps, str):
+            # 如果是字符串，按行分割
+            lines = test_steps.split('\n')
+            for i, line in enumerate(lines, 1):
+                if line.strip():
+                    normalized_steps.append({
+                        "step_number": i,
+                        "action": line.strip(),
+                        "data": "",
+                        "expected": ""
+                    })
+        elif isinstance(test_steps, list):
+            for i, step in enumerate(test_steps, 1):
+                if isinstance(step, dict):
+                    # 确保包含必要字段
+                    normalized_step = {
+                        "step_number": step.get("step_number", i),
+                        "action": step.get("action", ""),
+                        "data": step.get("data", ""),
+                        "expected": step.get("expected", "")
+                    }
+                    normalized_steps.append(normalized_step)
+                elif isinstance(step, str):
+                    normalized_steps.append({
+                        "step_number": i,
+                        "action": step.strip(),
+                        "data": "",
+                        "expected": ""
+                    })
+
+        return normalized_steps
+
+    def _normalize_tags(self, tags) -> List[str]:
+        """标准化标签"""
+        if not tags:
+            return []
+
+        normalized_tags = []
+
+        if isinstance(tags, str):
+            # 如果是字符串，按逗号分割
+            tag_list = tags.split(',')
+            for tag in tag_list:
+                clean_tag = tag.strip()
+                if clean_tag and clean_tag not in normalized_tags:
+                    normalized_tags.append(clean_tag)
+        elif isinstance(tags, list):
+            for tag in tags:
+                clean_tag = str(tag).strip()
+                if clean_tag and clean_tag not in normalized_tags:
+                    normalized_tags.append(clean_tag)
+
+        return normalized_tags[:10]  # 限制最多10个标签
+
     async def _save_test_case_requirements(
         self,
         session,
@@ -588,6 +1004,15 @@ class TestCaseSaverAgent(BaseAgent):
                 # 如果找到需求，建立关联（简单策略：关联所有同会话的需求）
                 requirement_ids = [req.id for req in session_requirements]
 
+            # 方法4: 智能匹配需求（基于关键词匹配）
+            if not requirement_ids:
+                requirement_ids = await self._smart_match_requirements(
+                    session, test_case_data, message
+                )
+
+            # 去重并验证需求ID
+            requirement_ids = await self._validate_requirement_ids(session, requirement_ids)
+
             # 保存关联关系
             if requirement_ids:
                 await self.send_response(
@@ -608,3 +1033,202 @@ class TestCaseSaverAgent(BaseAgent):
         except Exception as e:
             logger.error(f"保存测试用例需求关联失败: {str(e)}")
             # 不抛出异常，避免影响测试用例的保存
+
+    async def _smart_match_requirements(
+        self,
+        session,
+        test_case_data: TestCaseData,
+        message: TestCaseSaveRequest
+    ) -> List[str]:
+        """智能匹配相关需求"""
+        try:
+            # 提取测试用例关键词
+            keywords = self._extract_keywords_from_test_case(test_case_data)
+
+            if not keywords:
+                return []
+
+            # 搜索匹配的需求
+            matched_requirements = await self.requirement_repository.search_requirements_by_keywords(
+                session, keywords, message.project_id
+            )
+
+            return [req.id for req in matched_requirements[:5]]  # 最多关联5个需求
+
+        except Exception as e:
+            logger.warning(f"智能匹配需求失败: {str(e)}")
+            return []
+
+    def _extract_keywords_from_test_case(self, test_case_data: TestCaseData) -> List[str]:
+        """从测试用例中提取关键词"""
+        keywords = []
+
+        # 从标题中提取关键词
+        if test_case_data.title:
+            title_words = test_case_data.title.split()
+            keywords.extend([word for word in title_words if len(word) > 2])
+
+        # 从描述中提取关键词
+        if test_case_data.description:
+            desc_words = test_case_data.description.split()
+            keywords.extend([word for word in desc_words if len(word) > 2])
+
+        # 去重并返回前10个关键词
+        return list(set(keywords))[:10]
+
+    async def _validate_requirement_ids(self, session, requirement_ids: List[str]) -> List[str]:
+        """验证需求ID的有效性"""
+        if not requirement_ids:
+            return []
+
+        try:
+            # 去重
+            unique_ids = list(set(requirement_ids))
+
+            # 验证需求是否存在
+            valid_ids = []
+            for req_id in unique_ids:
+                if await self.requirement_repository.requirement_exists(session, req_id):
+                    valid_ids.append(req_id)
+                else:
+                    logger.warning(f"需求ID不存在: {req_id}")
+
+            return valid_ids
+
+        except Exception as e:
+            logger.error(f"验证需求ID失败: {str(e)}")
+            return []
+
+    async def _log_save_error(self, test_case_data: TestCaseData, error: Exception, index: int):
+        """记录保存错误的详细信息"""
+        try:
+            error_info = {
+                "index": index,
+                "title": test_case_data.title,
+                "test_type": test_case_data.test_type,
+                "error_type": type(error).__name__,
+                "error_message": str(error),
+                "timestamp": datetime.now().isoformat()
+            }
+
+            # 记录到日志文件
+            logger.error(f"测试用例保存错误详情: {json.dumps(error_info, ensure_ascii=False, indent=2)}")
+
+        except Exception as e:
+            logger.error(f"记录保存错误失败: {str(e)}")
+
+    async def get_save_statistics(self, session_id: Optional[str] = None) -> Dict[str, Any]:
+        """获取保存统计信息"""
+        try:
+            async with db_manager.get_session() as session:
+                from app.database.models.test_case import TestCase
+                from sqlalchemy import select, func
+
+                # 总数统计
+                total_count_query = select(func.count(TestCase.id))
+                if session_id:
+                    total_count_query = total_count_query.where(TestCase.session_id == session_id)
+
+                total_result = await session.execute(total_count_query)
+                total_count = total_result.scalar()
+
+                # AI生成统计
+                ai_generated_query = select(func.count(TestCase.id)).where(
+                    TestCase.ai_generated == True
+                )
+                if session_id:
+                    ai_generated_query = ai_generated_query.where(TestCase.session_id == session_id)
+
+                ai_result = await session.execute(ai_generated_query)
+                ai_generated_count = ai_result.scalar()
+
+                return {
+                    "total_count": total_count,
+                    "ai_generated_count": ai_generated_count,
+                    "manual_count": total_count - ai_generated_count,
+                    "session_id": session_id,
+                    "generated_at": datetime.now().isoformat()
+                }
+
+        except Exception as e:
+            logger.error(f"获取保存统计信息失败: {str(e)}")
+            return {
+                "error": str(e),
+                "generated_at": datetime.now().isoformat()
+            }
+
+    async def _log_save_error(self, test_case_data: TestCaseData, error: Exception, index: int):
+        """记录保存错误的详细信息"""
+        try:
+            error_info = {
+                "index": index,
+                "title": test_case_data.title,
+                "test_type": test_case_data.test_type,
+                "error_type": type(error).__name__,
+                "error_message": str(error),
+                "timestamp": datetime.now().isoformat()
+            }
+
+            # 记录到日志文件
+            logger.error(f"测试用例保存错误详情: {json.dumps(error_info, ensure_ascii=False, indent=2)}")
+
+        except Exception as e:
+            logger.error(f"记录保存错误失败: {str(e)}")
+
+    async def get_save_statistics(self, session_id: Optional[str] = None) -> Dict[str, Any]:
+        """获取保存统计信息"""
+        try:
+            async with db_manager.get_session() as session:
+                from app.database.models.test_case import TestCase
+                from sqlalchemy import select, func
+
+                # 基础查询
+                base_query = select(TestCase)
+                if session_id:
+                    base_query = base_query.where(TestCase.session_id == session_id)
+
+                # 总数统计
+                total_count_query = select(func.count(TestCase.id))
+                if session_id:
+                    total_count_query = total_count_query.where(TestCase.session_id == session_id)
+
+                total_result = await session.execute(total_count_query)
+                total_count = total_result.scalar()
+
+                # 按状态统计
+                status_query = select(
+                    TestCase.status,
+                    func.count(TestCase.id).label('count')
+                ).group_by(TestCase.status)
+
+                if session_id:
+                    status_query = status_query.where(TestCase.session_id == session_id)
+
+                status_result = await session.execute(status_query)
+                status_stats = {row.status.value: row.count for row in status_result}
+
+                # AI生成统计
+                ai_generated_query = select(func.count(TestCase.id)).where(
+                    TestCase.ai_generated == True
+                )
+                if session_id:
+                    ai_generated_query = ai_generated_query.where(TestCase.session_id == session_id)
+
+                ai_result = await session.execute(ai_generated_query)
+                ai_generated_count = ai_result.scalar()
+
+                return {
+                    "total_count": total_count,
+                    "ai_generated_count": ai_generated_count,
+                    "manual_count": total_count - ai_generated_count,
+                    "status_distribution": status_stats,
+                    "session_id": session_id,
+                    "generated_at": datetime.now().isoformat()
+                }
+
+        except Exception as e:
+            logger.error(f"获取保存统计信息失败: {str(e)}")
+            return {
+                "error": str(e),
+                "generated_at": datetime.now().isoformat()
+            }

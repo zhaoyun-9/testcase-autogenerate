@@ -11,7 +11,7 @@
         <div class="stats-cards">
           <div class="stat-card">
             <div class="stat-icon">
-              <el-icon><Notebook /></el-icon>
+              <el-icon><Document /></el-icon>
             </div>
             <div class="stat-content">
               <div class="stat-value">{{ stats.total }}</div>
@@ -327,7 +327,6 @@ import {
   View,
   Copy,
   Document,
-  Notebook,
   CircleCheck,
   CircleClose,
   Clock,

@@ -23,7 +23,7 @@
                 <!-- 快速统计 -->
                 <div class="quick-stats">
                   <div class="stat-item">
-                    <el-icon class="stat-icon"><Notebook /></el-icon>
+                    <el-icon class="stat-icon"><Document /></el-icon>
                     <div class="stat-content">
                       <span class="stat-value">{{ generatedTestCases.length }}</span>
                       <span class="stat-label">已生成</span>
@@ -173,7 +173,7 @@
                   :multiple="true"
                   :max-size="500"
                   :max-count="10"
-                  accepted-types=".pdf,.doc,.docx,.txt,.md,.png,.jpg,.jpeg,.json,.yaml,.yml"
+                  accepted-types=".pdf,.doc,.docx,.txt,.md,.png,.jpg,.jpeg,.json,.yaml,.yml,.mp4,.avi,.mov,.wmv,.flv,.webm"
                   @change="handleFileChange"
                   @upload-success="handleFileUploadSuccess"
                   @upload-error="handleFileUploadError"
@@ -566,7 +566,6 @@ import {
   Download,
   Share,
   Document,
-  Notebook,
   Clock,
   Monitor,
   Delete,

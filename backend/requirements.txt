@@ -1,4 +1,4 @@
-# 测试用例生成系统 - Python依赖包
+# 企业级测试用例生成系统 - Python依赖包
 
 # ==================== 核心框架 ====================
 fastapi
@@ -7,9 +7,9 @@ pydantic
 pydantic-settings
 
 # ==================== AutoGen智能体框架 ====================
-autogen-core==0.7.1
-autogen-agentchat==0.7.1
-autogen-ext[openai]==0.7.1
+autogen-core==0.7.2
+autogen-agentchat==0.7.2
+autogen-ext[openai]==0.7.2
 volcengine-python-sdk[ark]
 # ==================== 日志和监控 ====================
 loguru
@@ -21,7 +21,6 @@ sqlalchemy
 asyncmy
 aiomysql
 alembic
-greenlet  # SQLAlchemy异步操作必需依赖
 
 # ==================== 实时通信 ====================
 sse-starlette

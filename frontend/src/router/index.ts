@@ -27,7 +27,7 @@ const routes: RouteRecordRaw[] = [
     redirect: '/test-case/generate',
     meta: {
       title: '测试用例',
-      icon: 'Notebook',
+      icon: 'Document',
       showInMenu: true
     },
     children: [
@@ -38,6 +38,16 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '用例生成',
           icon: 'Plus',
+          showInMenu: true
+        }
+      },
+      {
+        path: 'test-video-upload',
+        name: 'TestVideoUpload',
+        component: () => import('@/views/test-video-upload.vue'),
+        meta: {
+          title: '视频上传测试',
+          icon: 'VideoPlay',
           showInMenu: true
         }
       },
@@ -63,12 +73,23 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
-        path: 'mindmap/:id',
-        name: 'MindmapDetail',
+        path: 'mindmap/:sessionId',
+        name: 'TestCaseMindmap',
         component: () => import('@/views/test-case/mindmap/index.vue'),
         meta: {
           title: '思维导图详情',
+          icon: 'Share',
           showInMenu: false
+        }
+      },
+      {
+        path: 'test-mindmap',
+        name: 'TestMindmap',
+        component: () => import('@/views/test-mindmap.vue'),
+        meta: {
+          title: '思维导图测试',
+          icon: 'Share',
+          showInMenu: true
         }
       },
       {
@@ -87,7 +108,27 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/test-case/session/detail.vue'),
         meta: {
           title: '会话详情',
-          icon: 'Notebook',
+          icon: 'Document',
+          showInMenu: false
+        }
+      },
+      {
+        path: 'detail/:id',
+        name: 'TestCaseDetail',
+        component: () => import('@/views/test-case/detail/index.vue'),
+        meta: {
+          title: '测试用例详情',
+          icon: 'Document',
+          showInMenu: false
+        }
+      },
+      {
+        path: 'edit/:id',
+        name: 'TestCaseEdit',
+        component: () => import('@/views/test-case/edit/index.vue'),
+        meta: {
+          title: '编辑测试用例',
+          icon: 'Edit',
           showInMenu: false
         }
       },
@@ -100,8 +141,7 @@ const routes: RouteRecordRaw[] = [
           icon: 'Files',
           showInMenu: true
         }
-      },
-
+      }
     ]
   },
   {

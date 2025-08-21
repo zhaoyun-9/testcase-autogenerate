@@ -320,7 +320,11 @@ export class FileTypeDetector {
     // 视频文件
     'video/mp4': { category: 'video', agent: 'video_analyzer', description: '视频分析' },
     'video/avi': { category: 'video', agent: 'video_analyzer', description: '视频分析' },
-    'video/quicktime': { category: 'video', agent: 'video_analyzer', description: '视频分析' }
+    'video/quicktime': { category: 'video', agent: 'video_analyzer', description: '视频分析' },
+    'video/x-msvideo': { category: 'video', agent: 'video_analyzer', description: '视频分析' },
+    'video/x-ms-wmv': { category: 'video', agent: 'video_analyzer', description: '视频分析' },
+    'video/x-flv': { category: 'video', agent: 'video_analyzer', description: '视频分析' },
+    'video/webm': { category: 'video', agent: 'video_analyzer', description: '视频分析' }
   }
 
   /**
@@ -356,7 +360,10 @@ export class FileTypeDetector {
         'sql': { category: 'database', agent: 'database_analyzer', description: '数据库分析' },
         'mp4': { category: 'video', agent: 'video_analyzer', description: '视频分析' },
         'avi': { category: 'video', agent: 'video_analyzer', description: '视频分析' },
-        'mov': { category: 'video', agent: 'video_analyzer', description: '视频分析' }
+        'mov': { category: 'video', agent: 'video_analyzer', description: '视频分析' },
+        'wmv': { category: 'video', agent: 'video_analyzer', description: '视频分析' },
+        'flv': { category: 'video', agent: 'video_analyzer', description: '视频分析' },
+        'webm': { category: 'video', agent: 'video_analyzer', description: '视频分析' }
       }
 
       const extMapping = extensionMapping[extension]

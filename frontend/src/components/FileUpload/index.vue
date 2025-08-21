@@ -119,6 +119,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { UploadFilled, VideoPlay, Picture, Document, DocumentCopy, Coin } from '@element-plus/icons-vue'
 import { FILE_TYPE_MAPPING } from '@/types/testCase'
 import { fileApi } from '@/api/testCase'
 
@@ -169,8 +170,8 @@ const description = ref('')
 
 // 支持的文件格式显示
 const displayFormats = computed(() => {
-  const formats = Object.keys(FILE_TYPE_MAPPING)
-  return formats.slice(0, 8).map(ext => ext.toUpperCase())
+  // 直接定义要显示的格式，确保包含视频格式
+  return ['JPG', 'PNG', 'PDF', 'DOC', 'JSON', 'MP4', 'AVI', 'WEBM']
 })
 
 // 监听文件列表变化
@@ -331,12 +332,12 @@ const getFileTypeIcon = (type: string) => {
     '.sql': 'Coin',
     '.db': 'Coin',
     '.sqlite': 'Coin',
-    '.mp4': 'VideoCamera',
-    '.avi': 'VideoCamera',
-    '.mov': 'VideoCamera',
-    '.wmv': 'VideoCamera',
-    '.flv': 'VideoCamera',
-    '.webm': 'VideoCamera'
+    '.mp4': 'VideoPlay',
+    '.avi': 'VideoPlay',
+    '.mov': 'VideoPlay',
+    '.wmv': 'VideoPlay',
+    '.flv': 'VideoPlay',
+    '.webm': 'VideoPlay'
   }
   return iconMap[type] || 'Document'
 }

@@ -18,7 +18,8 @@ from loguru import logger
 from app.core.messages import StreamMessage
 from app.core.messages.test_case import (
     DocumentParseRequest, ImageAnalysisRequest, ApiSpecParseRequest,
-    DatabaseSchemaParseRequest, VideoAnalysisRequest, DirectRequirementRequest
+    DatabaseSchemaParseRequest, VideoAnalysisRequest, DirectRequirementRequest,
+    RequirementAnalysisRequest
 )
 from app.core.agents.collector import StreamResponseCollector
 from app.core.types import AgentPlatform, FILE_TYPE_TO_AGENT_MAPPING, AgentTypes
@@ -50,6 +51,8 @@ AGENT_DISPLAY_NAMES = {
     "api_spec_parser": "API规范解析智能体",
     "database_schema_parser": "数据库Schema解析智能体",
     "video_analyzer": "视频分析智能体",
+    "requirement_analyzer": "需求解析智能体",
+    "test_point_extractor": "测试点提取智能体",
     "test_case_generator": "测试用例生成智能体",
     "mind_map_generator": "思维导图生成智能体",
     "excel_exporter": "Excel导出智能体",
@@ -309,6 +312,96 @@ async def create_generation_session(
     except Exception as e:
         logger.error(f"创建生成会话失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"创建会话失败: {str(e)}")
+
+
+class RequirementAnalysisAPIRequest(BaseModel):
+    """需求解析API请求"""
+    requirement_content: str = Field(..., description="需求内容")
+    source_type: str = Field(default="manual", description="来源类型")
+    analysis_config: Optional[Dict[str, Any]] = Field(None, description="解析配置")
+    project_id: Optional[str] = Field(None, description="项目ID")
+
+
+@router.post("/analyze-requirement", response_model=GenerateResponse)
+async def analyze_requirement_content(
+    request: RequirementAnalysisAPIRequest,
+    background_tasks: BackgroundTasks
+):
+    """
+    分析需求内容并生成测试用例
+
+    这个端点专门用于企业级需求解析，支持：
+    - 功能需求和非功能需求识别
+    - 业务流程分析
+    - 利益相关者识别
+    - 约束条件和依赖关系分析
+    - 风险识别和缓解策略
+    """
+    try:
+        # 生成会话ID
+        session_id = str(uuid.uuid4())
+        logger.info(f"创建需求解析会话: {session_id}")
+
+        # 验证需求内容
+        if not request.requirement_content or len(request.requirement_content.strip()) < 10:
+            raise HTTPException(status_code=400, detail="需求内容不能为空且至少包含10个字符")
+
+        # 创建会话信息
+        session_info = {
+            "session_id": session_id,
+            "input_type": "requirement_analysis",
+            "requirement_content": request.requirement_content,
+            "source_type": request.source_type,
+            "analysis_config": request.analysis_config or {},
+            "project_id": request.project_id,
+            "status": "created",
+            "progress": 0.0,
+            "current_stage": "初始化",
+            "selected_agent": "requirement_analyzer",
+            "created_at": datetime.now().isoformat(),
+            "test_cases_count": 0
+        }
+
+        # 存储到内存
+        active_sessions[session_id] = session_info
+
+        # 创建消息队列
+        message_queues[session_id] = asyncio.Queue()
+
+        # 在数据库中创建会话记录
+        await create_processing_session(
+            session_id=session_id,
+            session_type="requirement_analysis",
+            agent_type="requirement_analyzer",
+            input_data={
+                "requirement_content": request.requirement_content[:1000],  # 限制长度
+                "source_type": request.source_type,
+                "analysis_config": request.analysis_config,
+                "project_id": request.project_id
+            },
+            config=request.analysis_config or {}
+        )
+
+        # 启动后台任务处理需求解析
+        background_tasks.add_task(
+            _process_requirement_analysis_task,
+            session_id,
+            request
+        )
+
+        logger.info(f"需求解析会话创建成功: {session_id}")
+
+        return GenerateResponse(
+            session_id=session_id,
+            status="created",
+            message="需求解析会话已创建，正在进行企业级需求分析..."
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"创建需求解析会话失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"创建需求解析会话失败: {str(e)}")
 
 
 @router.post("/upload/{session_id}")
@@ -587,6 +680,129 @@ async def process_text_requirement(session_id: str):
             type="error",
             source="系统",
             content=f"❌ 文本需求处理失败: {str(e)}",
+            region="process",
+            platform="test_case",
+            is_final=True,
+            error=str(e)
+        )
+
+        if session_id in message_queues:
+            await message_queues[session_id].put(error_message)
+
+
+async def _process_requirement_analysis_task(session_id: str, request: RequirementAnalysisAPIRequest):
+    """处理需求解析任务的后台函数"""
+    try:
+        logger.info(f"开始处理需求解析任务: {session_id}")
+
+        # 更新会话状态
+        if session_id in active_sessions:
+            active_sessions[session_id]["status"] = "processing"
+            active_sessions[session_id]["current_stage"] = "需求解析中"
+
+        # 更新数据库状态
+        await update_session_status(session_id, SessionStatus.PROCESSING)
+
+        # 创建流式响应收集器
+        collector = StreamResponseCollector(platform=AgentPlatform.TEST_CASE)
+        collector.set_callback(_create_stream_callback(session_id))
+
+        # 获取编排器
+        orchestrator = get_test_case_orchestrator(collector=collector)
+
+        # 创建需求解析请求
+        from app.core.messages.test_case import RequirementAnalysisRequest as CoreRequirementAnalysisRequest
+        analysis_request = CoreRequirementAnalysisRequest(
+            session_id=session_id,
+            requirement_content=request.requirement_content,
+            source_type=request.source_type,
+            source_data={
+                "input_method": "api",
+                "timestamp": datetime.now().isoformat()
+            },
+            analysis_config=request.analysis_config,
+            project_id=request.project_id
+        )
+
+        # 发送进度消息
+        progress_message = StreamMessage(
+            message_id=f"progress-{uuid.uuid4()}",
+            type="progress",
+            source="系统",
+            content="🔍 正在进行企业级需求解析...",
+            region="process",
+            platform="test_case",
+            is_final=False,
+            result={"progress": 20}
+        )
+
+        if session_id in message_queues:
+            await message_queues[session_id].put(progress_message)
+
+        # 更新数据库进度
+        await update_session_progress(session_id, 20.0)
+
+        # 处理需求解析
+        logger.info(f"开始调用编排器处理需求解析: {session_id}")
+        await orchestrator.analyze_requirement(analysis_request)
+        logger.info(f"编排器需求解析完成: {session_id}")
+
+        # 发送处理完成消息
+        processing_message = StreamMessage(
+            message_id=f"processing-{uuid.uuid4()}",
+            type="progress",
+            source="系统",
+            content="🔄 需求解析完成，正在生成测试用例...",
+            region="process",
+            platform="test_case",
+            is_final=False,
+            result={"progress": 80}
+        )
+
+        if session_id in message_queues:
+            await message_queues[session_id].put(processing_message)
+
+        # 更新数据库进度
+        await update_session_progress(session_id, 80.0)
+
+        # 处理完成后，从内存中移除会话，让后续查询从数据库获取
+        logger.info(f"需求解析处理完成，从内存中移除会话: {session_id}")
+        active_sessions.pop(session_id, None)
+        message_queues.pop(session_id, None)
+
+        # 发送完成消息
+        completion_message = StreamMessage(
+            message_id=f"completion-{uuid.uuid4()}",
+            type="completion",
+            source="系统",
+            content="✅ 企业级需求解析完成",
+            region="process",
+            platform="test_case",
+            is_final=True
+        )
+
+        if session_id in message_queues:
+            await message_queues[session_id].put(completion_message)
+
+        logger.info(f"需求解析处理完成: {session_id}")
+
+    except Exception as e:
+        logger.error(f"需求解析处理失败: {session_id} - {e}", exc_info=True)
+
+        # 更新数据库状态为失败
+        await update_session_status(session_id, SessionStatus.FAILED, error_message=str(e))
+
+        # 处理失败后，从内存中移除会话
+        logger.info(f"需求解析处理失败，从内存中移除会话: {session_id}")
+        active_sessions.pop(session_id, None)
+        message_queues.pop(session_id, None)
+
+        # 发送错误消息
+        error_message = StreamMessage(
+            message_id=f"error-{uuid.uuid4()}",
+            type="error",
+            source="系统",
+            content=f"❌ 需求解析处理失败: {str(e)}",
             region="process",
             platform="test_case",
             is_final=True,

@@ -17,7 +17,7 @@ from app.core.agents.base import BaseAgent
 from app.core.types import TopicTypes, AgentTypes, AGENT_NAMES
 from app.core.messages.test_case import (
     ApiSpecParseRequest, ApiSpecParseResponse,
-    TestCaseGenerationRequest, TestCaseData
+    TestCaseData
 )
 from app.core.enums import TestType, TestLevel, Priority, InputSource
 
@@ -111,8 +111,8 @@ class ApiSpecParserAgent(BaseAgent):
                 result=response.model_dump()
             )
             
-            # 发送到测试用例生成智能体
-            await self._send_to_test_case_generator(response)
+            # 发送到测试点提取智能体
+            await self._send_to_test_point_extractor(response)
             
         except Exception as e:
             logger.error(f"API规范解析失败: {str(e)}")
@@ -431,26 +431,46 @@ class ApiSpecParserAgent(BaseAgent):
         
         return method_priority.get(endpoint.method, Priority.P2)
 
-    async def _send_to_test_case_generator(self, response: ApiSpecParseResponse):
-        """发送到测试用例生成智能体"""
+    async def _send_to_test_point_extractor(self, response: ApiSpecParseResponse):
+        """发送到测试点提取智能体"""
         try:
-            generation_request = TestCaseGenerationRequest(
+            from app.core.messages.test_case import TestPointExtractionRequest
+
+            # 构建需求解析结果
+            requirement_analysis_result = {
+                "source_type": "api_spec",
+                "api_spec_name": response.file_name,
+                "api_spec_content": response.parse_result,
+                "requirements": [tc.model_dump() for tc in response.test_cases],
+                "api_endpoints": response.parse_result.get("endpoints", []),
+                "data_models": response.parse_result.get("data_models", []),
+                "authentication": response.parse_result.get("authentication", {}),
+                "error_responses": response.parse_result.get("error_responses", []),
+                "business_rules": response.parse_result.get("business_rules", [])
+            }
+
+            extraction_request = TestPointExtractionRequest(
                 session_id=response.session_id,
-                source_type="api_spec",
-                source_data=response.model_dump(),
-                test_cases=response.test_cases,
-                generation_config={
-                    "auto_save": True,
-                    "generate_mind_map": True
-                }
+                requirement_analysis_result=requirement_analysis_result,
+                extraction_config={
+                    "enable_functional_testing": True,
+                    "enable_non_functional_testing": True,
+                    "enable_integration_testing": True,
+                    "enable_acceptance_testing": True,
+                    "enable_boundary_testing": True,
+                    "enable_exception_testing": True,
+                    "test_depth": "comprehensive",
+                    "focus_areas": ["api_contracts", "data_validation", "error_handling", "security"]
+                },
+                test_strategy="api_driven"
             )
-            
+
             await self.publish_message(
-                generation_request,
-                topic_id=TopicId(type=TopicTypes.TEST_CASE_GENERATOR.value, source=self.id.key)
+                extraction_request,
+                topic_id=TopicId(type=TopicTypes.TEST_POINT_EXTRACTOR.value, source=self.id.key)
             )
-            
-            logger.info(f"已发送到测试用例生成智能体: {response.session_id}")
-            
+
+            logger.info(f"已发送到测试点提取智能体: {response.session_id}")
+
         except Exception as e:
-            logger.error(f"发送到测试用例生成智能体失败: {str(e)}")
+            logger.error(f"发送到测试点提取智能体失败: {str(e)}")

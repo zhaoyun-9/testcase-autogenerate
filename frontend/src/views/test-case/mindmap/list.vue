@@ -1,452 +1,393 @@
 <template>
   <div class="mindmap-list">
-    <div class="page-header">
-      <h1>思维导图管理</h1>
-      <p>创建和管理您的思维导图</p>
-    </div>
+    <!-- 页面头部 -->
+    <TcPageHeader
+      title="思维导图管理"
+      subtitle="查看和管理所有生成的测试用例思维导图"
+      :actions="headerActions"
+    />
 
-    <div class="action-bar">
-      <el-button type="primary" @click="createNewMindmap">
-        <el-icon><Plus /></el-icon>
-        创建思维导图
-      </el-button>
-    </div>
-
-    <div class="mindmap-grid">
-      <div 
-        v-for="mindmap in mindmaps" 
-        :key="mindmap.id"
-        class="mindmap-card"
-        @click="openMindmap(mindmap)"
-      >
-        <div class="card-header">
-          <h3>{{ mindmap.title }}</h3>
-          <div class="card-actions">
-            <el-button size="small" text @click.stop="editMindmap(mindmap)">
-              <el-icon><Edit /></el-icon>
-            </el-button>
-            <el-button size="small" text type="danger" @click.stop="deleteMindmap(mindmap)">
-              <el-icon><Delete /></el-icon>
-            </el-button>
-          </div>
-        </div>
-        
-        <div class="card-preview">
-          <div class="preview-placeholder">
-            <el-icon><Share /></el-icon>
-            <span>{{ mindmap.nodeCount }} 个节点</span>
-          </div>
-        </div>
-        
-        <div class="card-footer">
-          <span class="update-time">{{ formatTime(mindmap.updatedAt) }}</span>
-          <el-tag size="small" :type="getStatusType(mindmap.status)">
-            {{ mindmap.status }}
-          </el-tag>
-        </div>
-      </div>
-    </div>
-
-    <!-- 创建/编辑对话框 -->
-    <el-dialog 
-      v-model="dialogVisible" 
-      :title="isEditing ? '编辑思维导图' : '创建思维导图'"
-      width="500px"
-    >
-      <el-form :model="form" label-width="80px">
-        <el-form-item label="标题">
-          <el-input v-model="form.title" placeholder="请输入思维导图标题" />
+    <!-- 搜索和过滤 -->
+    <TcCard class="search-card">
+      <el-form :model="searchForm" inline>
+        <el-form-item label="搜索">
+          <el-input
+            v-model="searchForm.search"
+            placeholder="搜索思维导图名称或会话ID"
+            clearable
+            style="width: 300px"
+            @keyup.enter="handleSearch"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
         </el-form-item>
-        <el-form-item label="描述">
-          <el-input 
-            v-model="form.description" 
-            type="textarea" 
-            :rows="3"
-            placeholder="请输入描述（可选）" 
-          />
+        <el-form-item label="项目">
+          <el-select
+            v-model="searchForm.project_id"
+            placeholder="选择项目"
+            clearable
+            style="width: 200px"
+          >
+            <el-option
+              v-for="project in projects"
+              :key="project.id"
+              :label="project.name"
+              :value="project.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="handleSearch">
+            <el-icon><Search /></el-icon>
+            搜索
+          </el-button>
+          <el-button @click="handleReset">
+            <el-icon><Refresh /></el-icon>
+            重置
+          </el-button>
         </el-form-item>
       </el-form>
-      
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveMindmap">
-          {{ isEditing ? '保存' : '创建' }}
-        </el-button>
+    </TcCard>
+
+    <!-- 思维导图列表 -->
+    <TcCard>
+      <template #header>
+        <div class="list-header">
+          <h3>思维导图列表</h3>
+          <div class="list-actions">
+            <el-button @click="refreshList">
+              <el-icon><Refresh /></el-icon>
+              刷新
+            </el-button>
+          </div>
+        </div>
       </template>
-    </el-dialog>
+
+      <el-table
+        :data="mindmapList"
+        v-loading="loading"
+        row-key="id"
+        @row-click="handleRowClick"
+      >
+        <el-table-column prop="name" label="名称" min-width="200">
+          <template #default="{ row }">
+            <div class="mindmap-name">
+              <el-icon class="mindmap-icon"><Share /></el-icon>
+              <span>{{ row.name }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        
+        <el-table-column prop="session_id" label="会话ID" width="120">
+          <template #default="{ row }">
+            <el-tag size="small" type="info">
+              {{ row.session_id.slice(0, 8) }}...
+            </el-tag>
+          </template>
+        </el-table-column>
+        
+        <el-table-column prop="project_name" label="项目" width="150">
+          <template #default="{ row }">
+            <span v-if="row.project_name">{{ row.project_name }}</span>
+            <span v-else class="text-placeholder">未分配</span>
+          </template>
+        </el-table-column>
+        
+        <el-table-column label="统计信息" width="200">
+          <template #default="{ row }">
+            <div class="mindmap-stats">
+              <el-tag size="small">
+                {{ getNodeCount(row) }} 节点
+              </el-tag>
+              <el-tag size="small" type="success">
+                {{ getEdgeCount(row) }} 连接
+              </el-tag>
+            </div>
+          </template>
+        </el-table-column>
+        
+        <el-table-column prop="created_at" label="创建时间" width="160">
+          <template #default="{ row }">
+            {{ formatTime(row.created_at) }}
+          </template>
+        </el-table-column>
+        
+        <el-table-column label="操作" width="200" fixed="right">
+          <template #default="{ row }">
+            <el-button type="primary" size="small" @click.stop="viewMindmap(row)">
+              <el-icon><View /></el-icon>
+              查看
+            </el-button>
+            <el-button size="small" @click.stop="viewSession(row)">
+              <el-icon><Document /></el-icon>
+              会话
+            </el-button>
+            <el-dropdown @command="(command) => handleDropdownCommand(command, row)">
+              <el-button size="small">
+                更多<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="export">
+                    <el-icon><Download /></el-icon>
+                    导出
+                  </el-dropdown-item>
+                  <el-dropdown-item command="delete" divided>
+                    <el-icon><Delete /></el-icon>
+                    删除
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <!-- 分页 -->
+      <div class="pagination-container">
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :total="pagination.total"
+          :page-sizes="[10, 20, 50, 100]"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="handleSizeChange"
+          @current-change="handleCurrentChange"
+        />
+      </div>
+    </TcCard>
+
+    <!-- 空状态 -->
+    <TcCard v-if="!loading && mindmapList.length === 0" class="empty-state">
+      <el-empty description="暂无思维导图">
+        <el-button type="primary" @click="$router.push('/test-case/generate')">
+          立即生成测试用例
+        </el-button>
+      </el-empty>
+    </TcCard>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Edit, Delete, Share } from '@element-plus/icons-vue'
+import { mindmapsApi, projectsApi } from '@/api'
+import TcPageHeader from '@/components/ui/TcPageHeader/index.vue'
+import TcCard from '@/components/ui/TcCard/index.vue'
 
 const router = useRouter()
 
 // 响应式数据
-const mindmaps = ref([
+const loading = ref(false)
+const mindmapList = ref<any[]>([])
+const projects = ref<any[]>([])
+
+// 搜索表单
+const searchForm = reactive({
+  search: '',
+  project_id: ''
+})
+
+// 分页
+const pagination = reactive({
+  page: 1,
+  pageSize: 20,
+  total: 0
+})
+
+// 页面头部操作
+const headerActions = computed(() => [
   {
-    id: 1,
-    title: '财会速度V4.47.0项目',
-    description: '财会速度平台代办中审对接企业一期项目思维导图',
-    nodeCount: 15,
-    status: '进行中',
-    updatedAt: new Date(),
-    data: {
-      mind_map_data: {
-        id: 'center',
-        label: '财会速度V4.47.0 平台代办中审对接企业一期',
-        type: 'center',
-        level: 0,
-        children: [
-          {
-            id: 'version',
-            label: '版本说明',
-            type: 'branch',
-            level: 1,
-            side: 'left',
-            children: []
-          },
-          {
-            id: 'docs',
-            label: '文档记录',
-            type: 'branch',
-            level: 1,
-            side: 'left',
-            children: []
-          },
-          {
-            id: 'natural-person',
-            label: '自然人信息',
-            type: 'branch',
-            level: 1,
-            side: 'right',
-            children: [
-              {
-                id: 'person-interface',
-                label: '对接示企接口',
-                type: 'leaf',
-                level: 2,
-                children: [
-                  {
-                    id: 'person-query',
-                    label: '自然人查档(明细)',
-                    type: 'leaf',
-                    level: 3,
-                    children: []
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            id: 'project-mgmt',
-            label: '项目管理',
-            type: 'branch',
-            level: 1,
-            side: 'right',
-            children: [
-              {
-                id: 'page',
-                label: '页面',
-                type: 'leaf',
-                level: 2,
-                children: []
-              }
-            ]
-          }
-        ]
-      }
-    }
-  },
-  {
-    id: 2,
-    title: '项目管理系统',
-    description: '通用项目管理系统架构设计',
-    nodeCount: 8,
-    status: '已完成',
-    updatedAt: new Date(Date.now() - 86400000),
-    data: {
-      mind_map_data: {
-        id: 'center',
-        label: '项目管理系统',
-        type: 'center',
-        level: 0,
-        children: [
-          {
-            id: 'planning',
-            label: '项目规划',
-            type: 'branch',
-            level: 1,
-            side: 'left',
-            children: []
-          },
-          {
-            id: 'development',
-            label: '开发阶段',
-            type: 'branch',
-            level: 1,
-            side: 'right',
-            children: []
-          }
-        ]
-      }
-    }
+    type: 'button' as const,
+    label: '生成测试用例',
+    buttonType: 'primary' as const,
+    icon: 'Plus',
+    handler: () => router.push('/test-case/generate')
   }
 ])
 
-const dialogVisible = ref(false)
-const isEditing = ref(false)
-const currentMindmap = ref<any>(null)
-
-const form = ref({
-  title: '',
-  description: ''
+// 生命周期
+onMounted(() => {
+  loadProjects()
+  loadMindmapList()
 })
 
 // 方法
-const createNewMindmap = () => {
-  isEditing.value = false
-  form.value = { title: '', description: '' }
-  dialogVisible.value = true
+const loadProjects = async () => {
+  try {
+    const response = await projectsApi.getProjects({ page_size: 100 })
+    projects.value = response.items || []
+  } catch (error) {
+    console.error('加载项目列表失败:', error)
+  }
 }
 
-const editMindmap = (mindmap: any) => {
-  isEditing.value = true
-  currentMindmap.value = mindmap
-  form.value = {
-    title: mindmap.title,
-    description: mindmap.description
-  }
-  dialogVisible.value = true
-}
-
-const saveMindmap = () => {
-  if (!form.value.title.trim()) {
-    ElMessage.warning('请输入思维导图标题')
-    return
-  }
-
-  if (isEditing.value && currentMindmap.value) {
-    // 编辑现有思维导图
-    currentMindmap.value.title = form.value.title
-    currentMindmap.value.description = form.value.description
-    currentMindmap.value.updatedAt = new Date()
-    ElMessage.success('思维导图已更新')
-  } else {
-    // 创建新思维导图
-    const newMindmap = {
-      id: Date.now(),
-      title: form.value.title,
-      description: form.value.description,
-      nodeCount: 1,
-      status: '草稿',
-      updatedAt: new Date(),
-      data: {
-        mind_map_data: {
-          id: 'center',
-          label: form.value.title,
-          type: 'center',
-          level: 0,
-          children: []
-        }
-      }
+const loadMindmapList = async () => {
+  loading.value = true
+  try {
+    const params = {
+      page: pagination.page,
+      page_size: pagination.pageSize,
+      search: searchForm.search || undefined,
+      project_id: searchForm.project_id || undefined
     }
-    mindmaps.value.unshift(newMindmap)
-    ElMessage.success('思维导图已创建')
+    
+    const response = await mindmapsApi.getMindmaps(params)
+    mindmapList.value = response.items || []
+    pagination.total = response.total || 0
+  } catch (error) {
+    console.error('加载思维导图列表失败:', error)
+    ElMessage.error('加载思维导图列表失败')
+  } finally {
+    loading.value = false
   }
-
-  dialogVisible.value = false
 }
 
-const deleteMindmap = async (mindmap: any) => {
+const handleSearch = () => {
+  pagination.page = 1
+  loadMindmapList()
+}
+
+const handleReset = () => {
+  searchForm.search = ''
+  searchForm.project_id = ''
+  pagination.page = 1
+  loadMindmapList()
+}
+
+const refreshList = () => {
+  loadMindmapList()
+}
+
+const handleSizeChange = (size: number) => {
+  pagination.pageSize = size
+  pagination.page = 1
+  loadMindmapList()
+}
+
+const handleCurrentChange = (page: number) => {
+  pagination.page = page
+  loadMindmapList()
+}
+
+const handleRowClick = (row: any) => {
+  viewMindmap(row)
+}
+
+const viewMindmap = (row: any) => {
+  router.push(`/test-case/mindmap/${row.session_id}`)
+}
+
+const viewSession = (row: any) => {
+  router.push(`/test-case/session/${row.session_id}`)
+}
+
+const handleDropdownCommand = async (command: string, row: any) => {
+  switch (command) {
+    case 'export':
+      await exportMindmap(row)
+      break
+    case 'delete':
+      await deleteMindmap(row)
+      break
+  }
+}
+
+const exportMindmap = async (row: any) => {
+  try {
+    ElMessage.info('导出功能开发中')
+  } catch (error) {
+    ElMessage.error('导出失败')
+  }
+}
+
+const deleteMindmap = async (row: any) => {
   try {
     await ElMessageBox.confirm(
-      `确定要删除思维导图"${mindmap.title}"吗？`,
+      `确定要删除思维导图"${row.name}"吗？`,
       '确认删除',
       {
-        confirmButtonText: '删除',
+        confirmButtonText: '确定',
         cancelButtonText: '取消',
         type: 'warning'
       }
     )
     
-    const index = mindmaps.value.findIndex(m => m.id === mindmap.id)
-    if (index > -1) {
-      mindmaps.value.splice(index, 1)
-      ElMessage.success('思维导图已删除')
+    await mindmapsApi.deleteMindmap(row.id)
+    ElMessage.success('删除成功')
+    loadMindmapList()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败')
     }
-  } catch {
-    // 用户取消删除
   }
 }
 
-const openMindmap = (mindmap: any) => {
-  // 将数据存储到 sessionStorage 中，然后跳转
-  sessionStorage.setItem(`mindmap_${mindmap.id}`, JSON.stringify(mindmap.data))
-
-  router.push({
-    name: 'MindmapDetail',
-    params: { id: mindmap.id.toString() }
-  })
+// 工具方法
+const formatTime = (time: string) => {
+  return new Date(time).toLocaleString()
 }
 
-const formatTime = (date: Date) => {
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-  
-  if (days === 0) {
-    return '今天'
-  } else if (days === 1) {
-    return '昨天'
-  } else if (days < 7) {
-    return `${days}天前`
-  } else {
-    return date.toLocaleDateString()
-  }
+const getNodeCount = (row: any) => {
+  return row.mind_map_data?.nodes?.length || 0
 }
 
-const getStatusType = (status: string) => {
-  switch (status) {
-    case '进行中': return 'primary'
-    case '已完成': return 'success'
-    case '草稿': return 'info'
-    default: return 'info'
-  }
+const getEdgeCount = (row: any) => {
+  return row.mind_map_data?.edges?.length || 0
 }
-
-onMounted(() => {
-  // 组件挂载时的初始化逻辑
-})
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .mindmap-list {
-  padding: 24px;
-  background: #f5f7fa;
-  min-height: 100vh;
-
-  .page-header {
-    margin-bottom: 24px;
-
-    h1 {
-      margin: 0 0 8px 0;
-      font-size: 28px;
-      font-weight: 600;
-      color: #1f2937;
-    }
-
-    p {
-      margin: 0;
-      color: #6b7280;
-      font-size: 16px;
-    }
-  }
-
-  .action-bar {
-    margin-bottom: 24px;
-    display: flex;
-    justify-content: flex-start;
-  }
-
-  .mindmap-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 20px;
-
-    .mindmap-card {
-      background: white;
-      border-radius: 12px;
-      padding: 20px;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      border: 1px solid #e5e7eb;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-
-      &:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        border-color: #3b82f6;
-      }
-
-      .card-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 16px;
-
-        h3 {
-          margin: 0;
-          font-size: 18px;
-          font-weight: 600;
-          color: #1f2937;
-          flex: 1;
-          line-height: 1.4;
-        }
-
-        .card-actions {
-          display: flex;
-          gap: 4px;
-          opacity: 0;
-          transition: opacity 0.2s ease;
-        }
-      }
-
-      &:hover .card-actions {
-        opacity: 1;
-      }
-
-      .card-preview {
-        margin-bottom: 16px;
-        height: 80px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: #f9fafb;
-        border-radius: 8px;
-        border: 2px dashed #d1d5db;
-
-        .preview-placeholder {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 8px;
-          color: #6b7280;
-
-          .el-icon {
-            font-size: 24px;
-          }
-
-          span {
-            font-size: 14px;
-          }
-        }
-      }
-
-      .card-footer {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-
-        .update-time {
-          font-size: 14px;
-          color: #6b7280;
-        }
-      }
-    }
-  }
+  padding: 20px;
 }
 
-@media (max-width: 768px) {
-  .mindmap-list {
-    padding: 16px;
+.search-card {
+  margin-bottom: 20px;
+}
 
-    .mindmap-grid {
-      grid-template-columns: 1fr;
-    }
-  }
+.list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.list-header h3 {
+  margin: 0;
+  color: #303133;
+}
+
+.mindmap-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mindmap-icon {
+  color: #409EFF;
+}
+
+.mindmap-stats {
+  display: flex;
+  gap: 8px;
+}
+
+.text-placeholder {
+  color: #909399;
+  font-style: italic;
+}
+
+.pagination-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.empty-state {
+  margin-top: 20px;
+  text-align: center;
 }
 </style>

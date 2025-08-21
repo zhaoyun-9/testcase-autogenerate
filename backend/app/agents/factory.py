@@ -39,7 +39,10 @@ class AgentFactory:
             from app.agents.test_case.api_spec_parser_agent import ApiSpecParserAgent
             from app.agents.test_case.database_schema_parser_agent import DatabaseSchemaParserAgent
             from app.agents.test_case.video_analyzer_agent import VideoAnalyzerAgent
+            from app.agents.test_case.requirement_analysis_agent import RequirementAnalysisAgent
+            from app.agents.test_case.test_point_extraction_agent import TestPointExtractionAgent
             from app.agents.test_case.test_case_generator_agent import TestCaseGeneratorAgent
+            from app.agents.test_case.rag_retrieval_agent import RagRetrievalAgent
             from app.agents.test_case.mind_map_generator_agent import MindMapGeneratorAgent
             from app.agents.test_case.excel_exporter_agent import ExcelExporterAgent
             from app.agents.database.test_case_saver_agent import TestCaseSaverAgent
@@ -52,7 +55,10 @@ class AgentFactory:
                 AgentTypes.API_SPEC_PARSER.value: ApiSpecParserAgent,
                 AgentTypes.DATABASE_SCHEMA_PARSER.value: DatabaseSchemaParserAgent,
                 AgentTypes.VIDEO_ANALYZER.value: VideoAnalyzerAgent,
+                AgentTypes.REQUIREMENT_ANALYZER.value: RequirementAnalysisAgent,
+                AgentTypes.TEST_POINT_EXTRACTOR.value: TestPointExtractionAgent,
                 AgentTypes.TEST_CASE_GENERATOR.value: TestCaseGeneratorAgent,
+                AgentTypes.RAG_RETRIEVAL.value: RagRetrievalAgent,
                 AgentTypes.MIND_MAP_GENERATOR.value: MindMapGeneratorAgent,
                 AgentTypes.EXCEL_EXPORTER.value: ExcelExporterAgent,
                 AgentTypes.TEST_CASE_SAVER.value: TestCaseSaverAgent,

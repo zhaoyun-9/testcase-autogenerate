@@ -11,10 +11,13 @@ import asyncio
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urljoin
+from urllib.request import pathname2url
 
 from autogen_core import message_handler, type_subscription, MessageContext, TopicId
 from loguru import logger
 from pydantic import BaseModel, Field
+from app.core.config import settings
 
 # 导入Volcengine Ark SDK
 try:
@@ -25,9 +28,10 @@ except ImportError:
 
 from app.core.agents.base import BaseAgent
 from app.core.types import TopicTypes, AgentTypes, AGENT_NAMES
+from app.core.enums import TestType, TestLevel, Priority, InputSource
 from app.core.messages.test_case import (
     VideoAnalysisRequest, VideoAnalysisResponse,
-    TestCaseGenerationRequest, TestCaseData
+    TestCaseData
 )
 
 
@@ -59,6 +63,8 @@ class VideoAnalyzerAgent(BaseAgent):
             **kwargs
         )
 
+        self.model_client_instance=model_client_instance
+
         # 支持的视频类型
         self.supported_video_types = {
             'screen_recording': self._analyze_screen_recording,
@@ -69,7 +75,7 @@ class VideoAnalyzerAgent(BaseAgent):
         }
 
         # 支持的视频格式
-        self.supported_formats = {'.mp4', '.avi', '.mov', '.wmv', '.flv', '.mkv'}
+        self.supported_formats = {'.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv'}
 
         # 初始化Volcengine Ark客户端
         self.ark_client = None
@@ -86,8 +92,8 @@ class VideoAnalyzerAgent(BaseAgent):
                 return
 
             # 从环境变量获取API Key和模型ID
-            api_key = os.getenv('ARK_API_KEY')
-            model_id = os.getenv('ARK_VIDEO_MODEL_ID', 'ep-20241210140356-8xqvs')  # 默认模型ID
+            api_key = settings.ARK_API_KEY
+            model_id = settings.ARK_VIDEO_MODEL_ID  # 默认模型ID
 
             if not api_key:
                 logger.warning("ARK_API_KEY环境变量未设置，视频分析功能将受限")
@@ -140,23 +146,8 @@ class VideoAnalyzerAgent(BaseAgent):
                 region="result"
             )
 
-            # 发送到测试用例生成智能体
-            test_case_request = TestCaseGenerationRequest(
-                session_id=message.session_id,
-                source_type="video",
-                source_data=response.model_dump(),
-                generation_config={
-                    "include_user_actions": True,
-                    "include_ui_elements": True,
-                    "include_business_flows": True,
-                    "test_case_format": "standard"
-                }
-            )
-
-            await self.publish_message(
-                test_case_request,
-                topic_id=TopicId(type=TopicTypes.TEST_CASE_GENERATOR.value, source=self.agent_id)
-            )
+            # 发送到测试点提取智能体
+            await self._send_to_test_point_extractor(response)
 
             logger.info(f"视频分析请求处理完成: {message.session_id}")
 
@@ -345,6 +336,42 @@ class VideoAnalyzerAgent(BaseAgent):
             analysis_prompt = self._build_video_analysis_prompt(message, video_type_desc)
 
             # 创建视频分析请求
+            # Volcengine Ark只支持base64、http或https URLs，不支持file://
+            # 将视频文件转换为base64编码
+            try:
+                # 检查文件大小（base64编码后会增加约33%）
+                file_size = video_path.stat().st_size
+                max_size = 50 * 1024 * 1024  # 50MB限制
+                if file_size > max_size:
+                    logger.warning(f"视频文件过大 ({file_size / 1024 / 1024:.1f}MB)，可能导致API调用失败")
+
+                await self.send_response(f"📤 正在编码视频文件 ({file_size / 1024 / 1024:.1f}MB)...")
+
+                with open(video_path, 'rb') as video_file:
+                    video_data = video_file.read()
+                    video_base64 = base64.b64encode(video_data).decode('utf-8')
+
+                # 获取视频文件的MIME类型
+                video_ext = video_path.suffix.lower()
+                mime_type_map = {
+                    '.mp4': 'video/mp4',
+                    '.avi': 'video/x-msvideo',
+                    '.mov': 'video/quicktime',
+                    '.wmv': 'video/x-ms-wmv',
+                    '.flv': 'video/x-flv',
+                    '.webm': 'video/webm',
+                    '.mkv': 'video/x-matroska'
+                }
+                mime_type = mime_type_map.get(video_ext, 'video/mp4')
+
+                video_data_url = f"data:{mime_type};base64,{video_base64}"
+
+                await self.send_response("🚀 开始调用Volcengine Ark API...")
+
+            except Exception as e:
+                logger.error(f"读取视频文件失败: {str(e)}")
+                raise
+
             response = self.ark_client.chat.completions.create(
                 model=self.ark_model,
                 messages=[
@@ -354,7 +381,7 @@ class VideoAnalyzerAgent(BaseAgent):
                             {
                                 "type": "video_url",
                                 "video_url": {
-                                    "url": f"file://{video_path.absolute()}"
+                                    "url": video_data_url
                                 }
                             },
                             {
@@ -363,7 +390,12 @@ class VideoAnalyzerAgent(BaseAgent):
                             }
                         ]
                     }
-                ]
+                ],
+                thinking={
+                    "type": "disabled"  # 不使用深度思考能力,
+                    # "type": "enabled" # 使用深度思考能力
+                    # "type": "auto" # 模型自行判断是否使用深度思考能力
+                },
             )
 
             # 解析响应
@@ -372,6 +404,7 @@ class VideoAnalyzerAgent(BaseAgent):
 
         except Exception as e:
             logger.error(f"Volcengine Ark视频分析失败: {str(e)}")
+            await self.send_response(f"⚠️ Volcengine Ark分析失败，降级到本地模型: {str(e)}")
             # 降级到本地模型
             return await self._analyze_video_with_local_model(video_path, message, video_type_desc)
 
@@ -558,59 +591,144 @@ class VideoAnalyzerAgent(BaseAgent):
 
             # 基于用户操作生成测试用例
             for i, action in enumerate(analysis_result.user_actions):
+                # 处理测试步骤 - 确保是字典列表格式
+                test_steps = []
+                if isinstance(action.get('steps'), list):
+                    for j, step in enumerate(action.get('steps', [])):
+                        if isinstance(step, str):
+                            test_steps.append({
+                                "step_number": j + 1,
+                                "action": step,
+                                "expected_result": "",
+                                "data": ""
+                            })
+                        elif isinstance(step, dict):
+                            test_steps.append({
+                                "step_number": j + 1,
+                                "action": step.get('action', step.get('description', '')),
+                                "expected_result": step.get('expected_result', step.get('expected', '')),
+                                "data": step.get('data', '')
+                            })
+                else:
+                    # 默认单步操作
+                    test_steps.append({
+                        "step_number": 1,
+                        "action": action.get('action', action.get('description', '用户操作')),
+                        "expected_result": action.get('expected_result', ''),
+                        "data": action.get('data', '')
+                    })
+
                 test_case = TestCaseData(
-                    id=str(uuid.uuid4()),
                     title=f"测试用例 {i+1}: {action.get('description', '用户操作')}",
                     description=action.get('description', ''),
-                    priority="medium",
-                    category="functional",
-                    steps=[
-                        {
-                            "step_number": 1,
-                            "action": action.get('action', ''),
-                            "expected_result": action.get('expected_result', ''),
-                            "data": action.get('data', {})
-                        }
-                    ],
-                    expected_results=[action.get('expected_result', '')],
-                    test_data={},
+                    preconditions=action.get('preconditions', ''),
+                    test_steps=test_steps,
+                    expected_results=action.get('expected_result', ''),
+                    test_type=TestType.FUNCTIONAL,
+                    test_level=TestLevel.SYSTEM,
+                    priority=Priority.P2,
+                    input_source=InputSource.VIDEO,
+                    source_file_path=str(message.video_path),
+                    source_metadata={
+                        "video_name": message.video_name,
+                        "video_type": analysis_result.video_type,
+                        "analysis_confidence": analysis_result.confidence_score
+                    },
                     tags=["video_generated", analysis_result.video_type],
-                    source="video_analysis",
-                    created_at=datetime.now().isoformat()
+                    ai_confidence=analysis_result.confidence_score
                 )
                 test_cases.append(test_case)
 
             # 基于业务流程生成测试用例
             for i, flow in enumerate(analysis_result.business_flows):
+                # 处理业务流程步骤
+                test_steps = []
+                if isinstance(flow.get('steps'), list):
+                    for j, step in enumerate(flow.get('steps', [])):
+                        if isinstance(step, str):
+                            test_steps.append({
+                                "step_number": j + 1,
+                                "action": step,
+                                "expected_result": "",
+                                "data": ""
+                            })
+                        elif isinstance(step, dict):
+                            test_steps.append({
+                                "step_number": j + 1,
+                                "action": step.get('action', step.get('description', '')),
+                                "expected_result": step.get('expected_result', step.get('expected', '')),
+                                "data": step.get('data', '')
+                            })
+
                 test_case = TestCaseData(
-                    id=str(uuid.uuid4()),
                     title=f"业务流程测试 {i+1}: {flow.get('name', '业务流程')}",
                     description=flow.get('description', ''),
-                    priority="high",
-                    category="business",
-                    steps=flow.get('steps', []),
-                    expected_results=flow.get('expected_results', []),
-                    test_data={},
+                    preconditions=flow.get('preconditions', ''),
+                    test_steps=test_steps,
+                    expected_results=flow.get('expected_results', ''),
+                    test_type=TestType.FUNCTIONAL,
+                    test_level=TestLevel.INTEGRATION,
+                    priority=Priority.P1,
+                    input_source=InputSource.VIDEO,
+                    source_file_path=str(message.video_path),
+                    source_metadata={
+                        "video_name": message.video_name,
+                        "video_type": analysis_result.video_type,
+                        "flow_type": "business_flow"
+                    },
                     tags=["video_generated", "business_flow"],
-                    source="video_analysis",
-                    created_at=datetime.now().isoformat()
+                    ai_confidence=analysis_result.confidence_score
                 )
                 test_cases.append(test_case)
 
             # 基于测试场景生成测试用例
             for i, scenario in enumerate(analysis_result.test_scenarios):
+                # 映射优先级字符串到枚举
+                priority_map = {
+                    'low': Priority.P3,
+                    'medium': Priority.P2,
+                    'high': Priority.P1,
+                    'critical': Priority.P0
+                }
+                scenario_priority = priority_map.get(scenario.get('priority', 'medium'), Priority.P2)
+
+                # 处理测试场景步骤
+                test_steps = []
+                if isinstance(scenario.get('steps'), list):
+                    for j, step in enumerate(scenario.get('steps', [])):
+                        if isinstance(step, str):
+                            test_steps.append({
+                                "step_number": j + 1,
+                                "action": step,
+                                "expected_result": "",
+                                "data": ""
+                            })
+                        elif isinstance(step, dict):
+                            test_steps.append({
+                                "step_number": j + 1,
+                                "action": step.get('action', step.get('description', '')),
+                                "expected_result": step.get('expected_result', step.get('expected', '')),
+                                "data": step.get('data', '')
+                            })
+
                 test_case = TestCaseData(
-                    id=str(uuid.uuid4()),
                     title=f"场景测试 {i+1}: {scenario.get('name', '测试场景')}",
                     description=scenario.get('description', ''),
-                    priority=scenario.get('priority', 'medium'),
-                    category=scenario.get('category', 'functional'),
-                    steps=scenario.get('steps', []),
-                    expected_results=scenario.get('expected_results', []),
-                    test_data=scenario.get('test_data', {}),
+                    preconditions=scenario.get('preconditions', ''),
+                    test_steps=test_steps,
+                    expected_results=scenario.get('expected_results', ''),
+                    test_type=TestType.FUNCTIONAL,
+                    test_level=TestLevel.SYSTEM,
+                    priority=scenario_priority,
+                    input_source=InputSource.VIDEO,
+                    source_file_path=str(message.video_path),
+                    source_metadata={
+                        "video_name": message.video_name,
+                        "video_type": analysis_result.video_type,
+                        "scenario_type": scenario.get('category', 'functional')
+                    },
                     tags=["video_generated", "scenario"],
-                    source="video_analysis",
-                    created_at=datetime.now().isoformat()
+                    ai_confidence=analysis_result.confidence_score
                 )
                 test_cases.append(test_case)
 
@@ -660,3 +778,47 @@ class VideoAnalyzerAgent(BaseAgent):
         except Exception as e:
             logger.error(f"用户旅程视频分析失败: {str(e)}")
             return self._create_default_analysis_result("user_journey")
+
+    async def _send_to_test_point_extractor(self, response: VideoAnalysisResponse):
+        """发送到测试点提取智能体"""
+        try:
+            from app.core.messages.test_case import TestPointExtractionRequest
+
+            # 构建需求解析结果
+            requirement_analysis_result = {
+                "source_type": "video",
+                "video_name": response.video_name,
+                "video_analysis": response.analysis_result,
+                "requirements": [tc.model_dump() for tc in response.test_cases],
+                "user_actions": response.analysis_result.get("user_actions", []),
+                "ui_elements": response.analysis_result.get("ui_elements", []),
+                "business_flows": response.analysis_result.get("business_flows", []),
+                "test_scenarios": response.analysis_result.get("test_scenarios", []),
+                "key_frames": response.analysis_result.get("key_frames", [])
+            }
+
+            extraction_request = TestPointExtractionRequest(
+                session_id=response.session_id,
+                requirement_analysis_result=requirement_analysis_result,
+                extraction_config={
+                    "enable_functional_testing": True,
+                    "enable_non_functional_testing": True,
+                    "enable_integration_testing": True,
+                    "enable_acceptance_testing": True,
+                    "enable_boundary_testing": True,
+                    "enable_exception_testing": True,
+                    "test_depth": "comprehensive",
+                    "focus_areas": ["user_interaction", "ui_testing", "workflow_testing", "scenario_testing"]
+                },
+                test_strategy="video_driven"
+            )
+
+            await self.publish_message(
+                extraction_request,
+                topic_id=TopicId(type=TopicTypes.TEST_POINT_EXTRACTOR.value, source=self.id.key)
+            )
+
+            logger.info(f"已发送到测试点提取智能体: {response.session_id}")
+
+        except Exception as e:
+            logger.error(f"发送到测试点提取智能体失败: {str(e)}")

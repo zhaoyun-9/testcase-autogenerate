@@ -19,7 +19,7 @@ from app.core.agents.base import BaseAgent
 from app.core.types import TopicTypes, AgentTypes, AGENT_NAMES
 from app.core.messages.test_case import (
     DocumentParseRequest, DocumentParseResponse,
-    TestCaseGenerationRequest, TestCaseData
+    TestCaseData
 )
 from app.core.enums import TestType, TestLevel, Priority, InputSource
 from app.agents.database.requirement_saver_agent import RequirementSaveRequest
@@ -99,7 +99,9 @@ class DocumentParserAgent(BaseAgent):
 
             # 生成测试用例
             await self.send_response("🔄 第2步: 基于文档内容生成测试用例...", region="progress")
-            test_cases = await self._generate_test_cases_from_document(parse_result, message)
+            test_cases = await self._generate_test_cases_from_document(
+                parse_result, message
+            )
 
             # 发送测试用例生成结果
             await self.send_response(
@@ -141,9 +143,9 @@ class DocumentParserAgent(BaseAgent):
                 }
             )
 
-            # 发送到测试用例生成智能体
-            await self.send_response("🔄 转发到测试用例生成智能体进行后续处理...", region="info")
-            await self._send_to_test_case_generator(response)
+            # 发送到测试点提取智能体
+            await self.send_response("🔄 转发到测试点提取智能体进行专业测试点分析...", region="info")
+            await self._send_to_test_point_extractor(response)
 
         except Exception as e:
             processing_time = (datetime.now() - start_time).total_seconds()
@@ -504,7 +506,9 @@ class DocumentParserAgent(BaseAgent):
                     ag_image = AGImage(pil_image)
 
                     # 使用多模态模型解析页面内容
-                    page_content = await self._analyze_pdf_page_with_multimodal(ag_image, page_num + 1, total_pages)
+                    page_content = await self._analyze_pdf_page_with_multimodal(
+                        ag_image, page_num + 1, total_pages
+                    )
 
                     page_time = (datetime.now() - page_start_time).total_seconds()
 
@@ -746,9 +750,8 @@ class DocumentParserAgent(BaseAgent):
             logger.error(f"处理页面内容格式失败: {str(e)}")
             return content
 
-    """解析DOCX文档"""
     async def _parse_docx(self, file_path: Path) -> str:
-
+        """解析DOCX文档"""
         try:
             from docx import Document
             
@@ -829,8 +832,8 @@ class DocumentParserAgent(BaseAgent):
             logger.error(f"Markdown解析失败: {str(e)}")
             raise
 
-    """使用AI分析文档内容"""
     async def _analyze_document_content(self, content: str, message: DocumentParseRequest) -> DocumentParseResult:
+        """使用AI分析文档内容"""
         try:
             # 创建AI分析智能体
             agent = self._create_document_analysis_agent()
@@ -857,9 +860,8 @@ class DocumentParserAgent(BaseAgent):
                 confidence_score=0.5
             )
 
-    """创建文档分析智能体"""
     def _create_document_analysis_agent(self):
-
+        """创建文档分析智能体"""
         from app.agents.factory import agent_factory
 
         return agent_factory.create_assistant_agent(
@@ -867,10 +869,9 @@ class DocumentParserAgent(BaseAgent):
             system_message=self._build_document_analysis_system_prompt(),
             model_client_type="deepseek"
         )
-    
-    """构建文档分析系统提示"""
-    def _build_document_analysis_system_prompt(self) -> str:
 
+    def _build_document_analysis_system_prompt(self) -> str:
+        """构建文档分析系统提示"""
         return """
 你是专业的需求文档分析专家，擅长从各种文档中提取测试相关信息。
 
@@ -919,8 +920,8 @@ class DocumentParserAgent(BaseAgent):
 - 确保返回有效的JSON格式,去掉 ```json 和 ```
 """
 
-    """构建文档分析用户提示"""
     def _build_document_analysis_prompt(self, content: str, message: DocumentParseRequest) -> str:
+        """构建文档分析提示"""
         return f"""
 请分析以下需求文档，提取测试相关信息：
 
@@ -934,8 +935,8 @@ class DocumentParserAgent(BaseAgent):
 请根据文档内容，识别所有可测试的功能点和业务流程，生成对应的测试场景。
 """
 
-    """执行AI分析"""
     async def _run_ai_analysis(self, agent, prompt: str) -> str:
+        """执行AI分析"""
         try:
             stream = agent.run_stream(task=prompt)
             async for event in stream:  # type: ignore
@@ -1075,29 +1076,48 @@ class DocumentParserAgent(BaseAgent):
         }
         return mapping.get(priority_str, Priority.P2)
 
-    async def _send_to_test_case_generator(self, response: DocumentParseResponse):
-        """发送到测试用例生成智能体"""
+    async def _send_to_test_point_extractor(self, response: DocumentParseResponse):
+        """发送到测试点提取智能体"""
         try:
-            generation_request = TestCaseGenerationRequest(
+            from app.core.messages.test_case import TestPointExtractionRequest
+
+            # 构建需求解析结果
+            requirement_analysis_result = {
+                "source_type": "document",
+                "document_name": response.file_name,
+                "document_content": response.parse_result,
+                "requirements": [tc.model_dump() for tc in response.test_cases],
+                "business_processes": response.parse_result.get("business_processes", []),
+                "functional_requirements": response.parse_result.get("functional_requirements", []),
+                "non_functional_requirements": response.parse_result.get("non_functional_requirements", []),
+                "constraints": response.parse_result.get("constraints", []),
+                "assumptions": response.parse_result.get("assumptions", [])
+            }
+
+            extraction_request = TestPointExtractionRequest(
                 session_id=response.session_id,
-                source_type="document",
-                source_data=response.model_dump(),
-                test_cases=response.test_cases,
-                generation_config={
-                    "auto_save": True,
-                    "generate_mind_map": True
-                }
+                requirement_analysis_result=requirement_analysis_result,
+                extraction_config={
+                    "enable_functional_testing": True,
+                    "enable_non_functional_testing": True,
+                    "enable_integration_testing": True,
+                    "enable_acceptance_testing": True,
+                    "enable_boundary_testing": True,
+                    "enable_exception_testing": True,
+                    "test_depth": "comprehensive"
+                },
+                test_strategy="document_driven"
             )
-            
+
             await self.publish_message(
-                generation_request,
-                topic_id=TopicId(type=TopicTypes.TEST_CASE_GENERATOR.value, source=self.id.key)
+                extraction_request,
+                topic_id=TopicId(type=TopicTypes.TEST_POINT_EXTRACTOR.value, source=self.id.key)
             )
-            
-            logger.info(f"已发送到测试用例生成智能体: {response.session_id}")
+
+            logger.info(f"已发送到测试点提取智能体: {response.session_id}")
 
         except Exception as e:
-            logger.error(f"发送到测试用例生成智能体失败: {str(e)}")
+            logger.error(f"发送到测试点提取智能体失败: {str(e)}")
 
     async def _save_requirements_to_database(self, parse_result: DocumentParseResult, message: DocumentParseRequest) -> None:
         """保存需求到数据库"""

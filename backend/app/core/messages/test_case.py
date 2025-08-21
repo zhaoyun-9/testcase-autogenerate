@@ -184,6 +184,56 @@ class DirectRequirementResponse(BaseMessage):
     created_at: str = Field(..., description="创建时间")
 
 
+# 需求解析相关消息
+class RequirementAnalysisRequest(BaseMessage):
+    """需求解析请求"""
+    requirement_content: str = Field(..., description="需求内容")
+    source_type: str = Field(..., description="来源类型")
+    source_data: Optional[Dict[str, Any]] = Field(None, description="来源数据")
+    analysis_config: Optional[Dict[str, Any]] = Field(None, description="解析配置")
+    project_id: Optional[str] = Field(None, description="项目ID")
+
+
+class RequirementAnalysisResponse(BaseMessage):
+    """需求解析响应"""
+    analysis_id: str = Field(..., description="解析ID")
+    requirement_content: str = Field(..., description="需求内容")
+    analysis_result: Dict[str, Any] = Field(..., description="解析结果")
+    requirements: List[Dict[str, Any]] = Field(..., description="提取的需求列表")
+    business_processes: List[Dict[str, Any]] = Field(..., description="业务流程列表")
+    stakeholders: List[Dict[str, Any]] = Field(..., description="利益相关者列表")
+    constraints: List[Dict[str, Any]] = Field(..., description="约束条件列表")
+    dependencies: List[Dict[str, Any]] = Field(..., description="依赖关系列表")
+    processing_time: float = Field(..., description="处理时间")
+    created_at: str = Field(..., description="创建时间")
+
+
+# 测试点提取相关消息
+class TestPointExtractionRequest(BaseMessage):
+    """测试点提取请求"""
+    requirement_analysis_result: Dict[str, Any] = Field(..., description="需求解析结果")
+    extraction_config: Optional[Dict[str, Any]] = Field(None, description="提取配置")
+    test_strategy: Optional[str] = Field(None, description="测试策略")
+    project_id: Optional[str] = Field(None, description="项目ID")
+
+
+class TestPointExtractionResponse(BaseMessage):
+    """测试点提取响应"""
+    extraction_id: str = Field(..., description="提取ID")
+    requirement_analysis_result: Dict[str, Any] = Field(..., description="原始需求解析结果")
+    extraction_result: Dict[str, Any] = Field(..., description="测试点提取结果")
+    functional_test_points: List[Dict[str, Any]] = Field(..., description="功能测试点")
+    non_functional_test_points: List[Dict[str, Any]] = Field(..., description="非功能测试点")
+    integration_test_points: List[Dict[str, Any]] = Field(..., description="集成测试点")
+    acceptance_test_points: List[Dict[str, Any]] = Field(..., description="验收测试点")
+    boundary_test_points: List[Dict[str, Any]] = Field(..., description="边界测试点")
+    exception_test_points: List[Dict[str, Any]] = Field(..., description="异常测试点")
+    test_coverage_analysis: Dict[str, Any] = Field(..., description="测试覆盖度分析")
+    test_priority_matrix: List[Dict[str, Any]] = Field(..., description="测试优先级矩阵")
+    processing_time: float = Field(..., description="处理时间")
+    created_at: str = Field(..., description="创建时间")
+
+
 class VideoAnalysisResponse(BaseMessage):
     """录屏分析响应"""
     video_id: str = Field(..., description="视频ID")
@@ -269,6 +319,35 @@ class BatchProcessResponse(BaseMessage):
     failed_files: int = Field(..., description="失败文件数")
     results: List[Dict[str, Any]] = Field(..., description="处理结果")
     processing_time: float = Field(..., description="处理时间")
+    created_at: str = Field(..., description="创建时间")
+
+
+# RAG知识库检索相关消息
+class RagRetrievalRequest(BaseMessage):
+    """RAG知识库检索请求"""
+    query: str = Field(..., description="检索查询")
+    requirements: Optional[str] = Field(None, description="需求内容")
+    test_points: Optional[List[Dict[str, Any]]] = Field(None, description="测试点列表")
+    search_mode: str = Field("basic", description="检索模式: basic/advanced/custom")
+    search_settings: Dict[str, Any] = Field(default_factory=dict, description="检索设置")
+    rag_generation_config: Dict[str, Any] = Field(default_factory=dict, description="RAG生成配置")
+    filters: Optional[Dict[str, Any]] = Field(None, description="过滤条件")
+    context_type: str = Field("test_case_generation", description="上下文类型")
+    max_results: int = Field(10, description="最大结果数量")
+
+
+class RagRetrievalResponse(BaseMessage):
+    """RAG知识库检索响应"""
+    retrieval_id: str = Field(..., description="检索ID")
+    query: str = Field(..., description="原始查询")
+    search_results: List[Dict[str, Any]] = Field(..., description="检索结果")
+    rag_completion: Optional[str] = Field(None, description="RAG生成的完整回答")
+    context_chunks: List[Dict[str, Any]] = Field(..., description="上下文片段")
+    relevance_scores: List[float] = Field(..., description="相关性评分")
+    total_results: int = Field(..., description="总结果数量")
+    processing_time: float = Field(..., description="处理时间")
+    confidence_score: float = Field(..., description="置信度评分")
+    knowledge_sources: List[str] = Field(..., description="知识来源列表")
     created_at: str = Field(..., description="创建时间")
 
 

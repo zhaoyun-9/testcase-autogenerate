@@ -1,5 +1,5 @@
 -- =====================================================
--- 测试用例生成平台 - 最终完整版数据库结构
+-- 企业级测试用例生成平台 - 最终完整版数据库结构
 -- 版本: Final Complete
 -- 设计原则: 简洁、高效、功能完整
 -- 包含: 核心表 + 需求管理 + 智能体日志 + 视图
@@ -398,7 +398,7 @@ INSERT INTO system_configs (id, config_key, config_value, config_type, descripti
 ('cfg-002', 'supported_image_formats', '["jpg", "jpeg", "png", "gif", "bmp", "webp"]', 'json', '支持的图片格式'),
 ('cfg-003', 'supported_document_formats', '["pdf", "docx", "doc", "txt", "md"]', 'json', '支持的文档格式'),
 ('cfg-004', 'supported_api_formats', '["json", "yaml", "yml"]', 'json', '支持的API规范格式'),
-('cfg-005', 'supported_video_formats', '["mp4", "avi", "mov", "wmv", "flv"]', 'json', '支持的视频格式'),
+('cfg-005', 'supported_video_formats', '["mp4", "avi", "mov", "wmv", "flv", "webm"]', 'json', '支持的视频格式'),
 ('cfg-006', 'ai_model_deepseek', '{"model": "deepseek-chat", "api_key": "", "base_url": ""}', 'json', 'DeepSeek模型配置'),
 ('cfg-007', 'ai_model_qwenvl', '{"model": "qwen-vl", "api_key": "", "base_url": ""}', 'json', 'QwenVL模型配置'),
 ('cfg-008', 'session_timeout', '3600', 'number', '会话超时时间(秒)'),

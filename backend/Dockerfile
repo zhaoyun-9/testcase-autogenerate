@@ -1,4 +1,4 @@
-# 测试用例生成系统 - 后端Dockerfile
+# 企业级测试用例生成系统 - 后端Dockerfile
 FROM python:3.11-slim
 
 # 设置工作目录

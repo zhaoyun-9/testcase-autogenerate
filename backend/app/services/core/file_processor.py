@@ -107,7 +107,7 @@ class FileProcessor:
             'documents': ['.pdf', '.docx', '.doc', '.txt', '.md'],
             'images': ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'],
             'api_specs': ['.json', '.yaml', '.yml'],
-            'videos': ['.mp4', '.avi', '.mov', '.wmv', '.flv'],
+            'videos': ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm'],
             'database': ['.sql', '.json', '.xml']
         }
     

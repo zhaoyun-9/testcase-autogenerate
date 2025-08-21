@@ -1,15 +1,12 @@
+@use './variables.scss' as *;
+@use './components.scss' as *;
+@use './utilities.scss' as *;
+@use './themes.scss' as *;
+
 // 全局样式文件 - 统一设计系统
 
 // 导入字体
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
-// 导入设计系统模块
-@import './variables.scss';
-@import './components.scss';
-@import './utilities.scss';
-@import './themes.scss';
-@import './themes.scss';
-@import './themes.scss';
 
 // 兼容性变量定义（保持向后兼容）
 :root {

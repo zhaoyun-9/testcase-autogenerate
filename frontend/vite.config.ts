@@ -38,6 +38,21 @@ export default defineConfig({
       }
     }
   },
+  optimizeDeps: {
+    exclude: ['chunk-IWH3TNCT.js'],
+    include: [
+      'element-plus/es/components/row/style/css',
+      'element-plus/es/components/col/style/css',
+      'element-plus/es/components/card/style/css'
+    ]
+  },
+  css: {
+    preprocessorOptions: {
+      scss: {
+        api: 'modern-compiler' // 使用现代 Sass API
+      }
+    }
+  },
   build: {
     outDir: 'dist',
     sourcemap: false,

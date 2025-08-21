@@ -2,6 +2,7 @@
   "name": "test-case-automation-frontend",
   "version": "1.0.0",
   "description": "测试用例自动化平台前端",
+  "type": "module",
   "private": true,
   "scripts": {
     "dev": "vite",
@@ -22,7 +23,6 @@
     "echarts": "^5.4.3",
     "element-plus": "^2.4.4",
     "file-saver": "^2.0.5",
-    "jszip": "^3.10.1",
     "lodash-es": "^4.17.21",
     "mermaid": "^10.6.1",
     "nprogress": "^0.2.0",
