@@ -562,7 +562,6 @@ class TestCaseGeneratorAgent(BaseAgent):
                         "test_point_id": test_point_id,
                         "test_point_name": test_point_name,
                         "test_scenario": scenario,
-                        "test_technique": test_point.get("test_technique"),
                         "automation_feasibility": test_point.get("automation_feasibility"),
                         "risk_level": test_point.get("risk_level"),
                         "business_impact": test_point.get("business_impact"),
@@ -782,7 +781,6 @@ class TestCaseGeneratorAgent(BaseAgent):
 - 描述: {test_point.get('description', 'N/A')}
 - 类别: {test_point.get('category', 'N/A')}
 - 优先级: {test_point.get('priority', 'N/A')}
-- 测试技术: {test_point.get('test_technique', 'N/A')}
 - 风险级别: {test_point.get('risk_level', 'N/A')}
 - 业务影响: {test_point.get('business_impact', 'N/A')}
 - 自动化可行性: {test_point.get('automation_feasibility', 'N/A')}

@@ -36,16 +36,12 @@ class TestPointExtractionResult(BaseModel):
     exception_test_points: List[Dict[str, Any]] = Field(default_factory=list, description="异常测试点")
     security_test_points: List[Dict[str, Any]] = Field(default_factory=list, description="安全测试点")
     performance_test_points: List[Dict[str, Any]] = Field(default_factory=list, description="性能测试点")
-    usability_test_points: List[Dict[str, Any]] = Field(default_factory=list, description="可用性测试点")
-    compatibility_test_points: List[Dict[str, Any]] = Field(default_factory=list, description="兼容性测试点")
     test_data_requirements: List[Dict[str, Any]] = Field(default_factory=list, description="测试数据需求")
     test_environment_requirements: List[Dict[str, Any]] = Field(default_factory=list, description="测试环境需求")
     test_dependency_matrix: List[Dict[str, Any]] = Field(default_factory=list, description="测试依赖矩阵")
     test_priority_matrix: List[Dict[str, Any]] = Field(default_factory=list, description="测试优先级矩阵")
     risk_based_test_points: List[Dict[str, Any]] = Field(default_factory=list, description="基于风险的测试点")
     regression_test_points: List[Dict[str, Any]] = Field(default_factory=list, description="回归测试点")
-    automation_feasibility: Dict[str, Any] = Field(default_factory=dict, description="自动化可行性分析")
-    test_execution_sequence: List[Dict[str, Any]] = Field(default_factory=list, description="测试执行序列")
     confidence_score: float = Field(0.0, description="提取置信度")
 
 
@@ -71,15 +67,12 @@ class TestPointExtractionAgent(BaseAgent):
             'enable_exception_extraction': True,
             'enable_security_extraction': True,
             'enable_performance_extraction': True,
-            'enable_usability_extraction': True,
-            'enable_compatibility_extraction': True,
             'enable_risk_based_extraction': True,
             'enable_automation_analysis': True,
             'confidence_threshold': 0.75,
             'max_test_points_per_category': 100,
             'priority_levels': ['P0', 'P1', 'P2', 'P3', 'P4'],
             'test_techniques': [
-                'equivalence_partitioning',
                 'boundary_value_analysis',
                 'decision_table_testing',
                 'state_transition_testing',
@@ -243,16 +236,12 @@ class TestPointExtractionAgent(BaseAgent):
                 exception_test_points=[],
                 security_test_points=[],
                 performance_test_points=[],
-                usability_test_points=[],
-                compatibility_test_points=[],
                 test_data_requirements=[],
                 test_environment_requirements=[],
                 test_dependency_matrix=[],
                 test_priority_matrix=[],
                 risk_based_test_points=[],
                 regression_test_points=[],
-                automation_feasibility={"automation_score": 0.3, "analysis_status": "failed"},
-                test_execution_sequence=[],
                 confidence_score=0.3
             )
 
@@ -285,12 +274,6 @@ class TestPointExtractionAgent(BaseAgent):
     "coverage_analysis": {
         "overall_coverage": 0.95,
         "functional_coverage": 0.98,
-        "non_functional_coverage": 0.90,
-        "integration_coverage": 0.85,
-        "boundary_coverage": 0.92,
-        "exception_coverage": 0.88,
-        "coverage_gaps": ["特定边界条件", "并发场景"],
-        "coverage_recommendations": ["增加压力测试", "完善异常处理测试"]
     },
     "functional_test_points": [
         {
@@ -299,7 +282,6 @@ class TestPointExtractionAgent(BaseAgent):
             "description": "验证用户登录功能的正确性",
             "category": "核心功能",
             "priority": "P0",
-            "test_technique": "equivalence_partitioning",
             "preconditions": ["用户账户存在", "系统正常运行"],
             "test_scenarios": [
                 "有效用户名和密码登录",
@@ -446,54 +428,6 @@ class TestPointExtractionAgent(BaseAgent):
             "automation_feasibility": "high"
         }
     ],
-    "usability_test_points": [
-        {
-            "id": "UTP-001",
-            "name": "用户界面易用性测试",
-            "description": "测试用户界面的易用性和用户体验",
-            "category": "可用性测试",
-            "priority": "P2",
-            "usability_aspects": [
-                "界面直观性",
-                "操作便捷性",
-                "错误提示清晰性"
-            ],
-            "test_scenarios": [
-                "新用户首次使用",
-                "常用功能操作",
-                "错误恢复操作"
-            ],
-            "success_criteria": [
-                "任务完成率 > 90%",
-                "用户满意度 > 4.0/5.0",
-                "错误恢复时间 < 30秒"
-            ],
-            "test_methods": ["用户测试", "专家评审", "A/B测试"],
-            "automation_feasibility": "low"
-        }
-    ],
-    "compatibility_test_points": [
-        {
-            "id": "CTP-001",
-            "name": "浏览器兼容性测试",
-            "description": "测试系统在不同浏览器上的兼容性",
-            "category": "兼容性测试",
-            "priority": "P2",
-            "compatibility_matrix": [
-                "Chrome 最新版本",
-                "Firefox 最新版本",
-                "Safari 最新版本",
-                "Edge 最新版本"
-            ],
-            "test_scenarios": [
-                "基本功能操作",
-                "界面显示效果",
-                "JavaScript功能"
-            ],
-            "expected_results": "所有浏览器功能一致",
-            "automation_feasibility": "high"
-        }
-    ],
     "test_data_requirements": [
         {
             "category": "用户数据",
@@ -549,28 +483,6 @@ class TestPointExtractionAgent(BaseAgent):
             "trigger_conditions": ["代码变更", "配置变更"],
             "test_points": ["FTP-001", "FTP-002", "FTP-003"],
             "automation_level": "full"
-        }
-    ],
-    "automation_feasibility": {
-        "overall_automation_score": 0.85,
-        "high_automation": ["功能测试", "性能测试", "安全测试"],
-        "medium_automation": ["集成测试", "兼容性测试"],
-        "low_automation": ["可用性测试", "探索性测试"],
-        "automation_tools": ["Selenium", "JMeter", "Postman"],
-        "automation_strategy": "优先自动化高频、高风险测试点"
-    },
-    "test_execution_sequence": [
-        {
-            "phase": "单元测试阶段",
-            "order": 1,
-            "test_types": ["功能测试", "边界测试"],
-            "parallel_execution": true
-        },
-        {
-            "phase": "集成测试阶段",
-            "order": 2,
-            "test_types": ["集成测试", "接口测试"],
-            "dependencies": ["单元测试通过"]
         }
     ],
     "confidence_score": 0.92
@@ -672,19 +584,12 @@ class TestPointExtractionAgent(BaseAgent):
                     "exception_test_points": [],
                     "security_test_points": [],
                     "performance_test_points": [],
-                    "usability_test_points": [],
-                    "compatibility_test_points": [],
                     "test_data_requirements": [],
                     "test_environment_requirements": [],
                     "test_dependency_matrix": [],
                     "test_priority_matrix": [],
                     "risk_based_test_points": [],
                     "regression_test_points": [],
-                    "automation_feasibility": {
-                        "overall_automation_score": 0.8,
-                        "automation_strategy": "优先自动化核心功能"
-                    },
-                    "test_execution_sequence": [],
                     "confidence_score": 0.8
                 }
                 """
@@ -706,19 +611,12 @@ class TestPointExtractionAgent(BaseAgent):
     "exception_test_points": [],
     "security_test_points": [],
     "performance_test_points": [],
-    "usability_test_points": [],
-    "compatibility_test_points": [],
     "test_data_requirements": [],
     "test_environment_requirements": [],
     "test_dependency_matrix": [],
     "test_priority_matrix": [],
     "risk_based_test_points": [],
     "regression_test_points": [],
-    "automation_feasibility": {
-        "overall_automation_score": 0.5,
-        "analysis_status": "failed"
-    },
-    "test_execution_sequence": [],
     "confidence_score": 0.5
 }
 """
@@ -744,16 +642,12 @@ class TestPointExtractionAgent(BaseAgent):
                 exception_test_points=result_data.get("exception_test_points", []),
                 security_test_points=result_data.get("security_test_points", []),
                 performance_test_points=result_data.get("performance_test_points", []),
-                usability_test_points=result_data.get("usability_test_points", []),
-                compatibility_test_points=result_data.get("compatibility_test_points", []),
                 test_data_requirements=result_data.get("test_data_requirements", []),
                 test_environment_requirements=result_data.get("test_environment_requirements", []),
                 test_dependency_matrix=result_data.get("test_dependency_matrix", []),
                 test_priority_matrix=result_data.get("test_priority_matrix", []),
                 risk_based_test_points=result_data.get("risk_based_test_points", []),
                 regression_test_points=result_data.get("regression_test_points", []),
-                automation_feasibility=result_data.get("automation_feasibility", {}),
-                test_execution_sequence=result_data.get("test_execution_sequence", []),
                 confidence_score=result_data.get("confidence_score", 0.5)
             )
 
@@ -770,16 +664,12 @@ class TestPointExtractionAgent(BaseAgent):
                 exception_test_points=[],
                 security_test_points=[],
                 performance_test_points=[],
-                usability_test_points=[],
-                compatibility_test_points=[],
                 test_data_requirements=[],
                 test_environment_requirements=[],
                 test_dependency_matrix=[],
                 test_priority_matrix=[],
                 risk_based_test_points=[],
                 regression_test_points=[],
-                automation_feasibility={"overall_automation_score": 0.3, "analysis_status": "failed"},
-                test_execution_sequence=[],
                 confidence_score=0.3
             )
 
@@ -804,7 +694,6 @@ class TestPointExtractionAgent(BaseAgent):
                     source_metadata={
                         "test_point_id": test_point.get("id"),
                         "test_point_type": "functional",
-                        "test_technique": test_point.get("test_technique"),
                         "category": test_point.get("category"),
                         "automation_feasibility": test_point.get("automation_feasibility"),
                         "risk_level": test_point.get("risk_level"),
